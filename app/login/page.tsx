@@ -30,6 +30,7 @@ export default function LoginPage() {
         <label className="lbl">Password<input className="input" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
         <button className="btn w-full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         <p className="mt-3 text-center text-sm"><Link className="text-maroon underline" href="/forgot-password">Forgot password?</Link></p>
+        <p className="mt-2 text-center text-sm">New teacher? <Link className="text-maroon underline" href="/teacher-activate">Activate your account</Link></p>
       </form>
     </div>
   );

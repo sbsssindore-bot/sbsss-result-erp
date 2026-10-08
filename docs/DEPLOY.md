@@ -37,3 +37,7 @@ Upload this project to `sbsssindore-bot/sbsss-result-erp` (branch `main`). Do no
 6. Marks entry → Review & Lock → Report Cards.
 
 **Email limit:** Supabase's free built-in email service sends only a few emails per hour. For 50–100 teachers, set up your own mail sender first: Supabase → Authentication → **SMTP Settings** (any provider such as Gmail/Resend/Brevo). Otherwise send invites in small batches.
+
+## Teacher self-activation (migration 0006)
+Run `supabase/migrations/0006_teacher_activation.sql` once in the Supabase SQL Editor (after 0001–0005).
+Teachers then open `<your-site>/teacher-activate`, enter Teacher ID + registered email, choose a password, and sign in with their Login ID.

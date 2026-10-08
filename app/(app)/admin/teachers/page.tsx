@@ -16,6 +16,7 @@ export default async function Teachers({ searchParams }: { searchParams: { add?:
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2"><h1 className="h2 !mb-0 flex-1">Teachers</h1>
         <Link className="btn" href="/admin/teachers?add=1">Add teacher</Link><Link className="btn btn-sec" href="/admin/import/teachers">Import Teachers</Link><Link className="btn btn-sec" href="/admin/assignments">Assign classes</Link><form action={inviteAllTeachers}><button className="btn btn-ghost">Send invites to all</button></form></div>
+      <p className="muted mb-3 text-sm">Teachers activate their own account at <b>/teacher-activate</b> using their Teacher ID and registered email — no need to create logins by hand. Invites are optional.</p>
       <Flash msg={searchParams.msg} err={searchParams.err} />
       {showForm && (
         <form action={saveTeacher} className="card max-w-3xl"><h2 className="h3">{editing ? 'Edit teacher' : 'Add teacher'}</h2>
@@ -29,10 +30,10 @@ export default async function Teachers({ searchParams }: { searchParams: { add?:
             <label className="lbl">Department<input className="input" name="department" defaultValue={editing?.department || ''} /></label>
             <label className="lbl">Login ID / username (optional)<input className="input" name="login_id" defaultValue={editing?.login_id || ''} placeholder="e.g. neha.verma" /></label></div>
           <div className="flex gap-2"><button className="btn">Save teacher</button><Link className="btn btn-ghost" href="/admin/teachers">Cancel</Link></div></form>)}
-      <div className="tw"><table className="t"><thead><tr><th>Teacher ID</th><th>Name</th><th>Email</th><th>Login ID</th><th>Mobile</th><th>Login</th><th>Assignments</th><th>Status</th><th></th></tr></thead><tbody>
+      <div className="tw"><table className="t"><thead><tr><th>Teacher ID</th><th>Name</th><th>Email</th><th>Login ID</th><th>Mobile</th><th>Account</th><th>Assignments</th><th>Status</th><th></th></tr></thead><tbody>
         {teachers.map((t: any) => (
           <tr key={t.id}><td>{t.employee_id}</td><td>{t.name}</td><td>{t.email}</td><td>{t.login_id}</td><td>{t.mobile}</td>
-            <td>{t.profile_id ? <span className="chip chip-ok">Has login</span> : <span className="chip chip-warn">Not invited</span>}</td><td>{n(t.id)}</td>
+            <td>{t.profile_id ? <span className="chip chip-ok">Activated / Has login</span> : <span className="chip chip-warn">Not Activated</span>}</td><td>{n(t.id)}</td>
             <td>{t.status === 'ACTIVE' ? <span className="chip chip-ok">Active</span> : <span className="chip chip-bad">Inactive</span>}</td>
             <td className="flex flex-wrap gap-1"><Link className="btn btn-sm btn-ghost" href={`/admin/teachers?edit=${t.id}`}>Edit</Link><Link className="btn btn-sm btn-ghost" href={`/admin/assignments?teacher=${t.id}`}>Assign</Link>
               {!t.profile_id ? <form action={inviteTeacher}><input type="hidden" name="id" value={t.id} /><button className="btn btn-sm btn-sec">Send invite</button></form>
