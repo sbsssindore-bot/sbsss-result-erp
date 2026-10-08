@@ -1,0 +1,38 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+service-account*.json
+
+# dependencies and builds
+node_modules/
+.next/
+out/
+build/
+dist/
+.vercel/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# logs, caches, OS/editor
+*.log
+npm-debug.log*
+.cache/
+.turbo/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# local data and exports (student/teacher spreadsheets must never be committed)
+*.xlsx
+*.xls
+*.csv
+backups/
+school-erp-backup-*.json
+
+# generated output
+out/

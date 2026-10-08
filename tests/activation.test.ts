@@ -86,3 +86,12 @@ test('login: Login ID resolves to the teacher email even with stray spaces / cas
   const client: any = { from: () => ({ select: () => ({ ilike: () => ({ limit: async () => ({ data: rows }) }) }) }) };
   assert.equal(await resolveLoginEmail(client, 't010'), E);
 });
+
+import { loginErrorMessage, BAD_CREDENTIALS } from '../lib/loginError';
+test('login errors: wrong password stays generic; config problems are surfaced', () => {
+  assert.equal(loginErrorMessage({ code: 'invalid_credentials', message: 'Invalid login credentials', status: 400 }), BAD_CREDENTIALS);
+  assert.match(loginErrorMessage({ message: 'Invalid API key', status: 401 }), /configuration error/);
+  assert.match(loginErrorMessage({ message: 'fetch failed', status: 0 }), /Cannot reach/);
+  assert.match(loginErrorMessage({ code: 'email_not_confirmed', message: 'Email not confirmed' }), /not confirmed/);
+  assert.match(loginErrorMessage({ status: 429, message: 'x' }), /Too many/);
+});
