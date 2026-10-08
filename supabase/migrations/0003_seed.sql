@@ -3,7 +3,7 @@
 -- Source of truth: 1st-12th_template_final.pdf (six report-card structures)
 -- Everything below is configuration data. Admin can change it from the UI.
 -- =====================================================================
-insert into roles (key, name) values ('ADMIN', 'Administrator'), ('TEACHER', 'Teacher');
+insert into roles (key, name) values ('ADMIN', 'Administrator'), ('TEACHER', 'Teacher') on conflict (key) do nothing;
 
 insert into classes (id, name, roman)
 select n, 'Class ' || r, r

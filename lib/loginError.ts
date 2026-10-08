@@ -10,6 +10,6 @@ export function loginErrorMessage(e: { message?: string; code?: string; status?:
   if (/invalid api key|apikey|jwt|no api key/i.test(msg) || e.status === 401 || e.status === 403)
     return 'Server configuration error: the Supabase URL/anon key on the server is wrong. (Open /api/auth-check to see what is misconfigured.)';
   if (/fetch failed|network|ENOTFOUND|ECONN|timeout/i.test(msg) || e.status === 0 || e.name === 'AuthRetryableFetchError')
-    return 'Cannot reach the authentication server. Check NEXT_PUBLIC_SUPABASE_URL on the server. (Open /api/auth-check.)';
+    return 'Cannot reach the authentication server. Open /api/auth-check to see the exact reason.';
   return BAD_CREDENTIALS;
 }

@@ -1,9 +1,10 @@
+import { cleanSupabaseUrl } from './env';
 import { promises as fs } from 'fs';
 import path from 'path';
 
 /** URL the browser should use for the school logo (custom upload or the built-in SBSSS logo). */
 export function logoUrl(settings: any): string {
-  if (settings?.logo_path) return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/branding/${settings.logo_path}`;
+  if (settings?.logo_path) return `${cleanSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL)}/storage/v1/object/public/branding/${settings.logo_path}`;
   return '/sbsss-logo.png';
 }
 /** CSS url(...) with the logo embedded, so the generated PDF never depends on the network. */
