@@ -95,3 +95,22 @@ test('login errors: wrong password stays generic; config problems are surfaced',
   assert.match(loginErrorMessage({ code: 'email_not_confirmed', message: 'Email not confirmed' }), /not confirmed/);
   assert.match(loginErrorMessage({ status: 429, message: 'x' }), /Too many/);
 });
+
+import { describeMismatch, normEmail } from '../lib/teacherActivation';
+test('canonical form ignores NBSP, zero-width, BOM, soft-hyphen, full-width letters and case', () => {
+  const E2 = 'poonit11verma@gmail.com';
+  for (const raw of [E2, ` ${E2} `, 'POONIT11VERMA@GMAIL.COM', 'poonit11verma@gmail.com​', '﻿poonit11verma@gmail.com', 'poon­it11verma@gmail.com', 'ｐｏｏｎｉｔ11verma@gmail.com', 'poonit11verma@gmail.com\r\n', 'poonit11verma @gmail.com'])
+    assert.equal(normEmail(raw), E2, JSON.stringify(raw));
+});
+test('a genuinely different address (poomit vs poonit) is still rejected and the server diagnostic points at the differing character without revealing the address', async () => {
+  const m = mk([T({ email: 'poomit11verma@gmail.com' })]);
+  const logs: string[] = []; const orig = console.error; console.error = (...a: any[]) => logs.push(a.join(' '));
+  try { const r = await run(m.store); assert.equal(r.code, 'EMAIL_MISMATCH'); assert.equal(m.users.length, 0); } finally { console.error = orig; }
+  assert.equal(logs.length, 1); assert.match(logs[0], /"firstDifferenceAtIndex":3/); assert.doesNotMatch(logs[0], /poomit11verma@gmail\.com|poonit11verma@gmail\.com/);
+  assert.equal(describeMismatch('a@b.co', 'a@b.co').firstDifferenceAtIndex, -1);
+});
+test('lookup falls back to login_id when employee_id differs', async () => {
+  const t = T({ employee_id: 'EMP-10', login_id: 'T010' }); const m = mk([t]);
+  m.store.findTeacher = async (id) => (t.employee_id.toLowerCase() === id ? t : t.login_id!.toLowerCase() === id ? t : null);
+  assert.equal((await run(m.store)).code, 'ACTIVATED');
+});

@@ -9,15 +9,21 @@ export default function Callback() {
   const [err, setErr] = useState('');
   useEffect(() => {
     const sb = supabaseBrowser();
-    const next = new URLSearchParams(location.search).get('next') || '/';
-    const code = new URLSearchParams(location.search).get('code');
+    const q = new URLSearchParams(location.search);
+    const rawNext = q.get('next') || '/';
+    const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/'; // never redirect off-site
+    const hash = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const code = q.get('code');
+    if (hash.get('error') || q.get('error')) { setErr('This link is invalid or has expired. Ask the administrator to send a new invitation.'); return; }
+    let sub: { unsubscribe: () => void } | undefined; let timer: ReturnType<typeof setTimeout> | undefined;
     (async () => {
       if (code) { const { error } = await sb.auth.exchangeCodeForSession(code); if (error) { setErr('This link has expired. Ask for a new one.'); return; } router.replace(next); return; }
-      const { data } = await sb.auth.getSession();
+      const { data } = await sb.auth.getSession(); // also picks up #access_token=… from the invitation link
       if (data.session) { router.replace(next); return; }
-      const { data: sub } = sb.auth.onAuthStateChange((_e, s) => { if (s) router.replace(next); });
-      setTimeout(() => { sub.subscription.unsubscribe(); setErr('This link is invalid or has expired. Ask for a new one.'); }, 6000);
+      sub = sb.auth.onAuthStateChange((_e, s) => { if (s) router.replace(next); }).data.subscription;
+      timer = setTimeout(() => { sub?.unsubscribe(); setErr('This link is invalid or has expired. Ask the administrator to send a new invitation.'); }, 8000);
     })();
+    return () => { sub?.unsubscribe(); if (timer) clearTimeout(timer); };
   }, [router]);
   return <div className="flex min-h-screen items-center justify-center p-4 text-sm">{err ? <span className="text-red-700">{err}</span> : 'Signing you in…'}</div>;
 }

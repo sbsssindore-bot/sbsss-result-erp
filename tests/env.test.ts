@@ -35,3 +35,21 @@ test('sign-in works against a Supabase-like server even when env values were pas
   assert.equal(bad.error?.code, 'invalid_credentials');
   srv.closeAllConnections(); srv.close();
 });
+
+import { siteUrlFrom, callbackUrl, PRODUCTION_DEFAULT } from '../lib/siteUrl';
+const H = (m: Record<string, string> = {}) => (h: string) => m[h] ?? null;
+test('invite/reset links never point to localhost in production', () => {
+  const P = { NODE_ENV: 'production' };
+  assert.equal(siteUrlFrom({ ...P, NEXT_PUBLIC_SITE_URL: 'https://sbsss-result-erp.vercel.app/' }, H()), 'https://sbsss-result-erp.vercel.app');
+  assert.equal(siteUrlFrom({ ...P, NEXT_PUBLIC_SITE_URL: 'http://localhost:3000' }, H({ origin: 'https://sbsss-result-erp.vercel.app' })), 'https://sbsss-result-erp.vercel.app', 'stale localhost setting ignored');
+  assert.equal(siteUrlFrom(P, H({ origin: 'http://localhost:3000' })), PRODUCTION_DEFAULT);
+  assert.equal(siteUrlFrom(P, H({ 'x-forwarded-host': 'sbsss-result-erp.vercel.app', 'x-forwarded-proto': 'https' })), 'https://sbsss-result-erp.vercel.app');
+  assert.equal(siteUrlFrom({ ...P, VERCEL_PROJECT_PRODUCTION_URL: 'sbsss-result-erp.vercel.app' }, H()), 'https://sbsss-result-erp.vercel.app');
+  assert.equal(siteUrlFrom(P, H()), PRODUCTION_DEFAULT);
+  assert.equal(siteUrlFrom({ ...P, NEXT_PUBLIC_SITE_URL: ' "https://sbsss-result-erp.vercel.app"\n' }, H()), 'https://sbsss-result-erp.vercel.app');
+});
+test('local development still uses localhost', () => {
+  assert.equal(siteUrlFrom({ NODE_ENV: 'development' }, H({ origin: 'http://localhost:3000' })), 'http://localhost:3000');
+  assert.equal(siteUrlFrom({ NODE_ENV: 'development' }, H()), 'http://localhost:3000');
+  assert.equal(callbackUrl('https://x.app'), 'https://x.app/auth/callback?next=%2Fset-password');
+});

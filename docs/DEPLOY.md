@@ -41,3 +41,9 @@ Upload this project to `sbsssindore-bot/sbsss-result-erp` (branch `main`). Do no
 ## Teacher self-activation (migration 0006)
 Run `supabase/migrations/0006_teacher_activation.sql` once in the Supabase SQL Editor (after 0001–0005).
 Teachers then open `<your-site>/teacher-activate`, enter Teacher ID + registered email, choose a password, and sign in with their Login ID.
+
+## Invitation / password-reset links (IMPORTANT)
+Vercel → Settings → Environment Variables: `NEXT_PUBLIC_SITE_URL` = `https://sbsss-result-erp.vercel.app` (then Redeploy).
+Supabase → Authentication → URL Configuration: **Site URL** = `https://sbsss-result-erp.vercel.app`;
+**Redirect URLs** add `https://sbsss-result-erp.vercel.app/**` (and `http://localhost:3000/**` for local development).
+If the Redirect URLs list does not contain the link's address, Supabase silently falls back to the Site URL (default `http://localhost:3000`).

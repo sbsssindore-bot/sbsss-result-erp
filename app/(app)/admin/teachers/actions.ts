@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { requireAdmin } from '@/lib/auth';
 import { friendlyError } from '@/lib/db';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { callbackUrl, siteUrlFrom } from '@/lib/siteUrl';
 
 const T = z.object({
   employee_id: z.string().trim().min(1, 'Employee ID is required.').max(40),
@@ -14,7 +15,8 @@ const T = z.object({
   login_id: z.string().trim().regex(/^[A-Za-z0-9._-]{3,40}$/, 'Login ID: 3–40 letters, digits, dot, dash or underscore, no spaces.').optional().or(z.literal('')),
 });
 const t = (fd: FormData, k: string) => { const v = String(fd.get(k) ?? '').trim(); return v === '' ? null : v; };
-const site = () => process.env.NEXT_PUBLIC_SITE_URL || (headers().get('origin') ?? '');
+const site = () => siteUrlFrom(process.env, (h) => headers().get(h));
+const redirectUrl = () => callbackUrl(site());
 const go = (m: string, err = false): never => redirect(`/admin/teachers?${err ? 'err' : 'msg'}=${encodeURIComponent(m)}`);
 
 export async function saveTeacher(fd: FormData) {
@@ -43,7 +45,7 @@ export async function inviteTeacher(fd: FormData) {
   if (!tc?.email) return go('Add an email address for this teacher first.', true);
   if (tc.profile_id) return go(`${tc.name} already has a login. Use “Reset password” if needed.`, true);
   try {
-    const { error } = await supabaseAdmin().auth.admin.inviteUserByEmail(tc.email, { redirectTo: `${site()}/auth/callback?next=/set-password`, data: { full_name: tc.name } });
+    const { error } = await supabaseAdmin().auth.admin.inviteUserByEmail(tc.email, { redirectTo: redirectUrl(), data: { full_name: tc.name } });
     if (error) return go(/already|registered/i.test(error.message) ? 'This email already has an account. Use “Reset password”.' : error.message, true);
   } catch (e: any) { return go(e.message || 'Could not send the invitation.', true); }
   revalidatePath('/admin/teachers');
@@ -55,7 +57,7 @@ export async function resetTeacherPassword(fd: FormData) {
   const { data: tc } = await sb.from('teachers').select('name,email').eq('id', String(fd.get('id'))).single();
   if (!tc?.email) return go('This teacher has no email address.', true);
   // Admin-side client uses the implicit flow, so the emailed link works on the teacher's own device.
-  const { error } = await supabaseAdmin().auth.resetPasswordForEmail(tc.email, { redirectTo: `${site()}/auth/callback?next=/set-password` });
+  const { error } = await supabaseAdmin().auth.resetPasswordForEmail(tc.email, { redirectTo: redirectUrl() });
   return error ? go(error.message, true) : go(`Password reset link sent to ${tc.email}.`);
 }
 
@@ -67,7 +69,7 @@ export async function inviteAllTeachers() {
   const admin = supabaseAdmin(); let ok = 0; const fails: string[] = [];
   for (const t of list as any[]) {
     try {
-      const { error } = await admin.auth.admin.inviteUserByEmail(t.email, { redirectTo: `${site()}/auth/callback?next=/set-password`, data: { full_name: t.name } });
+      const { error } = await admin.auth.admin.inviteUserByEmail(t.email, { redirectTo: redirectUrl(), data: { full_name: t.name } });
       if (error) fails.push(`${t.name}: ${error.message}`); else ok++;
     } catch (e: any) { fails.push(`${t.name}: ${e.message}`); }
   }

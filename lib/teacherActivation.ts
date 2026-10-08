@@ -31,10 +31,25 @@ export const MSG_ALREADY = 'This teacher account is already activated. Please us
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const IP_LIMIT = 20, ID_LIMIT = 8, WINDOW_MIN = 15;
 
-/** Removes whitespace, BOM, zero-width and non-breaking spaces that CSV/Excel imports and phone keyboards leave behind. */
-const INVISIBLE = /[\s ​-‍⁠﻿]/g;
-export const normId = (s: unknown) => String(s ?? '').replace(INVISIBLE, '').toLowerCase();
-export const normEmail = (s: unknown) => String(s ?? '').replace(INVISIBLE, '').toLowerCase();
+/** Canonical form for comparing IDs/emails: Unicode-normalised (full-width and look-alike compatibility forms), with every
+ *  whitespace, control, zero-width and other invisible/format character removed, then lower-cased. */
+const INVISIBLE = /[\p{Z}\p{Cc}\p{Cf}⁠﻿]/gu;
+const canon = (s: unknown) => String(s ?? '').normalize('NFKC').replace(INVISIBLE, '').toLowerCase();
+export const normId = canon;
+export const normEmail = canon;
+
+/** Safe description for SERVER logs only: never the full address, only shape + where the two values first differ. */
+export function describeMismatch(stored: unknown, submitted: string) {
+  const a = String(stored ?? ''), b = submitted;
+  const mask = (e: string) => (e.length <= 3 ? '***' : e[0] + '***' + e.slice(e.indexOf('@') > 0 ? e.indexOf('@') : e.length - 1));
+  let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return {
+    storedNull: stored == null, storedRawLength: a.length, storedCanonLength: canon(a).length, submittedLength: b.length,
+    storedNonAscii: [...a].filter((c) => c.charCodeAt(0) > 126 || c.charCodeAt(0) < 33).length,
+    storedMasked: mask(canon(a)), submittedMasked: mask(b), firstDifferenceAtIndex: canon(a) === b ? -1 : i,
+    sameDomain: canon(a).split('@')[1] === b.split('@')[1], sameLocalPartLength: canon(a).split('@')[0]?.length === b.split('@')[0]?.length,
+  };
+}
 
 export function passwordProblem(p: string): string | null {
   if (p.length < 8) return 'Password must be at least 8 characters.';
@@ -64,7 +79,11 @@ export async function activateTeacher(store: ActivationStore, input: { employeeI
   let t: TeacherRow | null;
   try { t = await store.findTeacher(employeeId); } catch { return err('Could not read teacher records right now. Please try again, or contact the administrator.'); }
   if (!t) return fail('NOT_FOUND', MSG_NOT_FOUND);
-  if (!t.email || normEmail(t.email) !== email) return fail('EMAIL_MISMATCH', MSG_EMAIL);
+  if (!t.email || normEmail(t.email) !== email) {
+    // Server-side only (Vercel function logs). Nothing here is sent to the browser.
+    console.error('[teacher-activation] email mismatch for', JSON.stringify({ employeeId, matchedRow: t.employee_id.trim(), ...describeMismatch(t.email, email) }));
+    return fail('EMAIL_MISMATCH', MSG_EMAIL);
+  }
   if (t.status !== 'ACTIVE') return { ok: false, code: 'INACTIVE', message: MSG_INACTIVE };
 
   const loginId = (t.login_id || '').trim() || t.employee_id.trim();
@@ -112,11 +131,17 @@ export function supabaseStore(admin: any): ActivationStore {
     },
     async recordAttempt(a) { await admin.from('teacher_activation_attempts').insert({ employee_id: a.employeeId, ip: a.ip, ok: a.ok }); },
     async findTeacher(employeeId) {
-      // Fetch candidates loosely (stored IDs may carry stray spaces/case), then compare after normalising both sides.
-      const { data, error } = await admin.from('teachers').select('id,employee_id,name,email,login_id,profile_id,status').ilike('employee_id', `%${esc(employeeId)}%`).limit(25);
+      // Match on employee_id OR login_id. Candidates are fetched loosely (stored values may carry stray spaces/case),
+      // then compared exactly after canonicalising. employeeId has already passed LOGIN_ID_RE (letters/digits . _ - only).
+      const pat = `*${employeeId}*`; // PostgREST wildcard; "_" may over-match, which is fine because the exact check follows
+      const { data, error } = await admin.from('teachers').select('id,employee_id,name,email,login_id,profile_id,status').or(`employee_id.ilike.${pat},login_id.ilike.${pat}`).limit(50);
       if (error) throw new Error(error.message);
-      const hits = (data || []).filter((r: any) => normId(r.employee_id) === employeeId);
-      return hits.length === 1 ? hits[0] : null;
+      const rows = data || [];
+      const byEmp = rows.filter((r: any) => normId(r.employee_id) === employeeId);
+      if (byEmp.length === 1) return byEmp[0];
+      if (byEmp.length > 1) return null;
+      const byLogin = rows.filter((r: any) => normId(r.login_id) === employeeId);
+      return byLogin.length === 1 ? byLogin[0] : null;
     },
     async getAuthUser(id) { const { data, error } = await admin.auth.admin.getUserById(id); return error || !data?.user ? null : info(data.user); },
     async findAuthUserByEmail(email) {
