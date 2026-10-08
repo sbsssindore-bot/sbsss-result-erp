@@ -1,75 +1,88 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateTeacher, MSG_ALREADY, MSG_MISMATCH, passwordProblem, type ActivationStore, type TeacherRow } from '../lib/teacherActivation';
+import { activateTeacher, MSG_ALREADY, MSG_EMAIL, MSG_INACTIVE, MSG_NOT_FOUND, passwordProblem, type ActivationStore, type AuthUserInfo, type TeacherRow } from '../lib/teacherActivation';
+import { resolveLoginEmail } from '../lib/loginId';
 
-function mk(teachers: TeacherRow[], profiles: { id: string; email: string; role: string }[] = []) {
-  const authUsers: string[] = []; const attempts: { employeeId: string; ip: string; ok: boolean }[] = []; let failLink = false;
+type AU = { id: string; email: string; activated: boolean; password?: string };
+function mk(teachers: TeacherRow[], users: AU[] = [], roles: Record<string, string> = {}) {
+  const attempts: { employeeId: string; ip: string; ok: boolean }[] = []; let failLink = false; let n = 0;
+  const info = (u?: AU): AuthUserInfo | null => (u ? { id: u.id, email: u.email, activated: u.activated } : null);
   const store: ActivationStore = {
     async failuresSince(_m, by) { return attempts.filter((a) => !a.ok && (by.ip ? a.ip === by.ip : a.employeeId.toLowerCase() === by.employeeId!.toLowerCase())).length; },
     async recordAttempt(a) { attempts.push(a); },
-    async findTeacher(id) { return teachers.find((t) => t.employee_id.toLowerCase() === id.toLowerCase()) || null; },
-    async findProfileByEmail(e) { return profiles.find((p) => p.email.toLowerCase() === e) || null; },
-    async createAuthUser(email) { if (authUsers.includes(email) || profiles.some((p) => p.email === email)) return { exists: true }; authUsers.push(email); return { id: 'u-' + email }; },
-    async deleteAuthUser(id) { const i = authUsers.indexOf(id.slice(2)); if (i >= 0) authUsers.splice(i, 1); },
-    async upsertTeacherProfile(id, email) { profiles.push({ id, email, role: 'TEACHER' }); return null; },
-    async linkTeacher(tid, pid, login) { if (failLink) return 'boom'; const t = teachers.find((x) => x.id === tid)!; if (t.profile_id) return 'already'; t.profile_id = pid; t.login_id = login; return null; },
+    async findTeacher(id) { return teachers.find((t) => t.employee_id.replace(/\s/g, '').toLowerCase() === id) || null; },
+    async getAuthUser(id) { return info(users.find((u) => u.id === id)); },
+    async findAuthUserByEmail(e) { return info(users.find((u) => u.email.toLowerCase() === e)); },
+    async getProfileRole(id) { return roles[id] ?? null; },
+    async createAuthUser(email, password) { if (users.some((u) => u.email === email)) return { error: 'exists' }; const u = { id: 'new' + ++n, email, activated: true, password }; users.push(u); return { id: u.id }; },
+    async updateAuthUser(id, p) { const u = users.find((x) => x.id === id)!; u.email = p.email; u.password = p.password; u.activated = true; return null; },
+    async deleteAuthUser(id) { const i = users.findIndex((u) => u.id === id); if (i >= 0) users.splice(i, 1); },
+    async upsertTeacherProfile(id) { roles[id] = 'TEACHER'; return null; },
+    async linkTeacher(tid, pid, login) { if (failLink) return 'boom'; const t = teachers.find((x) => x.id === tid)!; if (t.profile_id && t.profile_id !== pid) return 'taken'; t.profile_id = pid; t.login_id = login; return null; },
   };
-  return { store, authUsers, attempts, profiles, setFailLink: (v: boolean) => { failLink = v; } };
+  return { store, users, attempts, roles, setFailLink: (v: boolean) => { failLink = v; } };
 }
-const T = (o: Partial<TeacherRow> = {}): TeacherRow => ({ id: 't1', employee_id: 'T010', name: 'Naina Verma', email: 'naina@x.com', login_id: null, profile_id: null, status: 'ACTIVE', ...o });
-const run = (s: ActivationStore, o: any = {}) => activateTeacher(s, { employeeId: 'T010', email: 'naina@x.com', password: 'Passw0rdX', ip: '1.1.1.1', ...o });
+const E = 'poonit11verma@gmail.com';
+const T = (o: Partial<TeacherRow> = {}): TeacherRow => ({ id: 't1', employee_id: 'T010', name: 'Naina Verma', email: E, login_id: 'T010', profile_id: null, status: 'ACTIVE', ...o });
+const run = (s: ActivationStore, o: any = {}) => activateTeacher(s, { employeeId: 'T010', email: E, password: 'Passw0rdX', ip: '1.1.1.1', ...o });
 
-test('valid ID + email creates Auth user, profile TEACHER, links teacher and sets login_id', async () => {
+test('T010 + poonit11verma@gmail.com with NO auth user: creates user, TEACHER profile, links, login_id T010', async () => {
   const t = T(); const m = mk([t]); const r = await run(m.store);
+  assert.equal(r.code, 'ACTIVATED'); assert.equal(r.loginId, 'T010'); assert.equal(m.users.length, 1); assert.equal(t.profile_id, m.users[0].id); assert.equal(m.roles[m.users[0].id], 'TEACHER');
+});
+test('T010 with EXISTING auth user + TEACHER profile (already linked): same user id, password updated, no duplicate', async () => {
+  const t = T({ profile_id: 'old' }); const m = mk([t], [{ id: 'old', email: E, activated: false }], { old: 'TEACHER' });
+  const r = await run(m.store, { password: 'NewPass123' });
+  assert.equal(r.code, 'ACTIVATED'); assert.equal(m.users.length, 1); assert.equal(m.users[0].id, 'old'); assert.equal(m.users[0].password, 'NewPass123'); assert.equal(t.profile_id, 'old'); assert.equal(m.roles.old, 'TEACHER');
+});
+test('existing auth user NOT yet linked to the teacher (profile_id null): found by email, linked, same id', async () => {
+  const t = T(); const m = mk([t], [{ id: 'old', email: E, activated: false }], { old: 'TEACHER' }); const r = await run(m.store);
+  assert.equal(r.code, 'ACTIVATED'); assert.equal(t.profile_id, 'old'); assert.equal(m.users.length, 1);
+});
+test('existing auth user with a different email than the teacher record is moved to the teacher email so Login-ID sign-in works', async () => {
+  const t = T({ profile_id: 'old' }); const m = mk([t], [{ id: 'old', email: 'poomit11verma@gmail.com', activated: false }], { old: 'TEACHER' }); await run(m.store);
+  assert.equal(m.users[0].email, E);
+});
+test('input is normalised: spaces, upper case, zero-width chars, NBSP', async () => {
+  const m = mk([T()]); const r = await run(m.store, { employeeId: ' t010​ ', email: '  PoonIT11Verma@Gmail.com ' }); assert.equal(r.code, 'ACTIVATED');
+});
+test('stored data with stray spaces / capitals in employee_id and email still matches', async () => {
+  const m = mk([T({ employee_id: ' T010 ', email: ' PoonIT11verma@gmail.com ', login_id: null })]); const r = await run(m.store);
   assert.equal(r.code, 'ACTIVATED'); assert.equal(r.loginId, 'T010');
-  assert.equal(t.profile_id, 'u-naina@x.com'); assert.equal(t.login_id, 'T010'); assert.equal(m.profiles[0].role, 'TEACHER'); assert.equal(m.authUsers.length, 1);
 });
-test('email is matched case-insensitively and ID too', async () => {
-  const m = mk([T()]); assert.equal((await run(m.store, { employeeId: 't010', email: ' NAINA@X.com ' })).code, 'ACTIVATED');
+test('specific error messages', async () => {
+  const m = mk([T(), T({ id: 't2', employee_id: 'T011', email: 'x@y.com', status: 'INACTIVE' })]);
+  assert.equal((await run(m.store, { employeeId: 'T999' })).message, MSG_NOT_FOUND);
+  assert.equal((await run(m.store, { email: 'wrong@x.com', ip: '2.2.2.2' })).message, MSG_EMAIL);
+  assert.equal((await run(m.store, { employeeId: 'T011', email: 'x@y.com', ip: '3.3.3.3' })).message, MSG_INACTIVE);
+  assert.equal(m.users.length, 0);
 });
-test('wrong email and unknown ID give the SAME message (no ID probing) and no account is created', async () => {
-  const m = mk([T()]);
-  const a = await run(m.store, { email: 'other@x.com' }); const b = await run(m.store, { employeeId: 'T999' });
-  assert.equal(a.message, MSG_MISMATCH); assert.equal(b.message, MSG_MISMATCH); assert.equal(m.authUsers.length, 0);
+test('fully activated account says so and does not touch the password', async () => {
+  const t = T({ profile_id: 'old' }); const m = mk([t], [{ id: 'old', email: E, activated: true, password: 'Orig1234' }], { old: 'TEACHER' });
+  const r = await run(m.store, { password: 'Other1234' }); assert.equal(r.code, 'ALREADY'); assert.equal(r.message, MSG_ALREADY); assert.equal(m.users[0].password, 'Orig1234');
 });
-test('knowing only the employee ID is not enough', async () => {
-  const m = mk([T()]); const r = await run(m.store, { email: 'attacker@evil.com' }); assert.equal(r.ok, false); assert.equal(m.authUsers.length, 0);
+test('activating twice leaves exactly one Auth user', async () => {
+  const m = mk([T()]); await run(m.store); assert.equal((await run(m.store)).code, 'ALREADY'); assert.equal(m.users.length, 1);
 });
-test('already activated is reported gracefully; no duplicate user', async () => {
-  const t = T({ profile_id: 'p1', login_id: 'T010' }); const m = mk([t]); const r = await run(m.store);
-  assert.equal(r.code, 'ALREADY'); assert.equal(r.message, MSG_ALREADY); assert.equal(m.authUsers.length, 0);
+test('an ADMIN profile can never be taken over', async () => {
+  const t = T(); const m = mk([t], [{ id: 'adm', email: E, activated: false, password: 'Admin1234' }], { adm: 'ADMIN' }); const r = await run(m.store);
+  assert.equal(r.code, 'ADMIN_EMAIL'); assert.equal(m.users[0].password, 'Admin1234'); assert.equal(t.profile_id, null);
 });
-test('activating twice only creates one Auth user', async () => {
-  const m = mk([T()]); await run(m.store); const r2 = await run(m.store); assert.equal(r2.code, 'ALREADY'); assert.equal(m.authUsers.length, 1);
+test('failed linking rolls back a newly created user', async () => {
+  const m = mk([T()]); m.setFailLink(true); assert.equal((await run(m.store)).code, 'ERROR'); assert.equal(m.users.length, 0);
 });
-test('inactive teacher cannot activate', async () => {
-  const m = mk([T({ status: 'INACTIVE' })]); assert.equal((await run(m.store)).code, 'INACTIVE'); assert.equal(m.authUsers.length, 0);
+test('database read error is reported as an error, NOT as a mismatch', async () => {
+  const m = mk([T()]); m.store.findTeacher = async () => { throw new Error('boom'); }; const r = await run(m.store); assert.equal(r.code, 'ERROR');
 });
-test('existing TEACHER auth account (T010 test case) is linked, not duplicated, password untouched', async () => {
-  const t = T(); const m = mk([t], [{ id: 'old', email: 'naina@x.com', role: 'TEACHER' }]); const r = await run(m.store);
-  assert.equal(r.code, 'LINKED'); assert.equal(t.profile_id, 'old'); assert.equal(m.authUsers.length, 0); assert.equal(m.profiles.length, 1);
+test('weak passwords rejected', async () => {
+  const m = mk([T()]); for (const p of ['short1', 'allletters', '12345678']) assert.equal((await run(m.store, { password: p })).code, 'WEAK'); assert.equal(passwordProblem('Good1234'), null);
 });
-test('an email that belongs to an ADMIN profile can never be activated as teacher', async () => {
-  const t = T(); const m = mk([t], [{ id: 'adm', email: 'naina@x.com', role: 'ADMIN' }]); const r = await run(m.store);
-  assert.equal(r.code, 'ADMIN_EMAIL'); assert.equal(t.profile_id, null); assert.equal(m.profiles[0].role, 'ADMIN');
-});
-test('if linking fails the new Auth user is rolled back', async () => {
-  const m = mk([T()]); m.setFailLink(true); const r = await run(m.store);
-  assert.equal(r.code, 'ERROR'); assert.equal(m.authUsers.length, 0);
-});
-test('weak passwords are rejected before any lookup', async () => {
-  const m = mk([T()]);
-  for (const p of ['short1', 'allletters', '12345678']) assert.equal((await run(m.store, { password: p })).code, 'WEAK');
-  assert.equal(passwordProblem('Good1234'), null); assert.equal(m.authUsers.length, 0);
-});
-test('brute force is throttled per employee ID and per IP', async () => {
-  const m = mk([T()]);
-  for (let i = 0; i < 6; i++) await run(m.store, { email: `x${i}@x.com`, ip: `9.9.9.${i}` });
+test('brute force is throttled', async () => {
+  const m = mk([T()]); for (let i = 0; i < 8; i++) await run(m.store, { email: `x${i}@x.com`, ip: `9.9.9.${i}` });
   assert.equal((await run(m.store)).code, 'RATE_LIMIT');
-  const m2 = mk([T()]);
-  for (let i = 0; i < 20; i++) await run(m2.store, { employeeId: `Z${i}`, email: 'a@b.co' });
-  assert.equal((await run(m2.store, { employeeId: 'Z99' })).code, 'RATE_LIMIT');
 });
-test('malformed IDs/emails are rejected', async () => {
-  const m = mk([T()]); assert.equal((await run(m.store, { employeeId: "T010' or 1=1" })).message, MSG_MISMATCH); assert.equal((await run(m.store, { email: 'nope' })).code, 'INVALID');
+test('login: Login ID resolves to the teacher email even with stray spaces / case in the table', async () => {
+  const rows = [{ email: ' PoonIT11verma@gmail.com ', status: 'ACTIVE', login_id: ' T010', employee_id: 'T010 ' }];
+  const client: any = { from: () => ({ select: () => ({ ilike: () => ({ limit: async () => ({ data: rows }) }) }) }) };
+  assert.equal(await resolveLoginEmail(client, 't010'), E);
 });

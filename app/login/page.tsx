@@ -9,7 +9,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
-  useEffect(() => { if (new URLSearchParams(location.search).get('error') === 'inactive') setErr('This account is inactive. Contact the administrator.'); }, []);
+  const [note, setNote] = useState('');
+  useEffect(() => { const q = new URLSearchParams(location.search); if (q.get('error') === 'inactive') setErr('This account is inactive. Contact the administrator.'); if (q.get('activated')) setNote('Account activated. Sign in with your Login ID and the password you just created.'); }, []);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -25,6 +26,7 @@ export default function LoginPage() {
         <img src="/sbsss-logo.png" alt="SBSSS logo" className="mx-auto mb-3 h-24 w-24 object-contain" />
         <h1 className="text-center text-sm font-bold tracking-wide text-ink">SHRI BHARTIYA SANSKRITI SHIKSHA SANSTHAN</h1>
         <p className="mb-5 text-center text-xs text-slate-500">Result Management System</p>
+        {note && !err && <div role="status" className="mb-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">{note}</div>}
         {err && <div role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</div>}
         <label className="lbl">Email or Login ID<input className="input" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
         <label className="lbl">Password<input className="input" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>

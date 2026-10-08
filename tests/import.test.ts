@@ -135,7 +135,7 @@ test('students → teachers → assignments: preview, validation, import, and te
 
   // 5. Login ID / Teacher ID resolve to the right email, inactive or unknown do not
   const client = { from: (table: string) => { let col = '', pat = ''; const api: any = { select() { return api; }, ilike(c: string, p: string) { col = c; pat = p; return api; },
-    async limit() { const rows = await q(`select email,status from ${table} where ${col} ilike $1`, [pat]); return { data: rows }; }, then(r: any, j: any) { return this.limit().then(r, j); } }; return api; } };
+    async limit() { const rows = await q(`select email,status,login_id,employee_id from ${table} where ${col} ilike $1`, [pat]); return { data: rows }; }, then(r: any, j: any) { return this.limit().then(r, j); } }; return api; } };
   await db.exec('reset role');
   assert.equal(await resolveLoginEmail(client, 'neha.verma'), 'neha@example.com');
   assert.equal(await resolveLoginEmail(client, 'NEHA.VERMA'), 'neha@example.com');

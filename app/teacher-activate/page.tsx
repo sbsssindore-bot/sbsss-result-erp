@@ -1,16 +1,20 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { activateTeacherAccount } from '@/app/actions/activate';
 
 export default function TeacherActivate() {
+  const router = useRouter();
   const [empId, setEmpId] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ message: string; loginId?: string; already?: boolean } | null>(null);
+  const [done, setDone] = useState<{ message: string; loginId?: string; already?: boolean; redirect?: boolean } | null>(null);
+
+  useEffect(() => { if (!done?.redirect) return; const t = setTimeout(() => router.replace('/login?activated=1'), 3000); return () => clearTimeout(t); }, [done, router]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setErr('');
@@ -18,7 +22,7 @@ export default function TeacherActivate() {
     setBusy(true);
     const r = await activateTeacherAccount(empId.trim(), email.trim(), pw);
     setBusy(false);
-    if (r.ok) { setDone({ message: r.message, loginId: r.loginId }); return; }
+    if (r.ok) { setDone({ message: r.message, loginId: r.loginId, redirect: true }); return; }
     if (r.code === 'ALREADY') { setDone({ message: r.message, loginId: r.loginId, already: true }); return; }
     setErr(r.message);
   }
@@ -34,7 +38,8 @@ export default function TeacherActivate() {
               {done.already ? '' : '✅ '}{done.message}
             </div>
             {done.loginId && <p className="mb-3 text-sm">Your Login ID: <b>{done.loginId}</b></p>}
-            <Link className="btn w-full text-center" href="/login">Go to Teacher Login</Link>
+            {done.redirect && <p className="mb-2 text-xs text-slate-500">Taking you to the login page…</p>}
+            <Link className="btn w-full text-center" href="/login?activated=1">Go to Teacher Login</Link>
           </div>
         ) : (
           <form onSubmit={submit}>
