@@ -1,61 +1,67 @@
 
-export async function inviteTeacher(fd: FormData) {
+/** Send an invitation to every active teacher who has an email but no login yet. */
+export async function inviteAllTeachers() {
   const { sb } = await requireAdmin();
 
-  const { data: tc, error: lookupError } = await sb
+  const { data, error } = await sb
     .from('teachers')
-    .select('id,name,email,profile_id')
-    .eq('id', String(fd.get('id')))
-    .single();
+    .select('id, name, email')
+    .is('profile_id', null)
+    .eq('status', 'ACTIVE')
+    .not('email', 'is', null)
+    .limit(200);
 
-  if (lookupError || !tc) {
-    return go('Teacher record not found. Please refresh and try again.', true);
+  if (error) {
+    return go('Could not load teachers: ' + error.message, true);
   }
 
-  if (!tc.email) {
-    return go('Add an email address for this teacher first.', true);
+  const list = data || [];
+
+  if (!list.length) {
+    return go('Every active teacher with an email already has a login.');
   }
 
-  if (tc.profile_id) {
-    return go(
-      `${tc.name} already has a login. Use “Reset password” if needed.`,
-      true
-    );
-  }
+  const admin = supabaseAdmin();
+  let ok = 0;
+  const fails: string[] = [];
 
-  let failure = '';
+  for (const teacher of list) {
+    try {
+      const { error: inviteError } =
+        await admin.auth.admin.inviteUserByEmail(teacher.email!, {
+          redirectTo: redirectUrl(),
+          data: { full_name: teacher.name },
+        });
 
-  try {
-    const { error } = await supabaseAdmin().auth.admin.inviteUserByEmail(
-      tc.email,
-      {
-        redirectTo: redirectUrl(),
-        data: { full_name: tc.name },
+      if (inviteError) {
+        fails.push(`${teacher.name}: ${inviteError.message}`);
+      } else {
+        ok++;
       }
-    );
-
-    if (error) {
-      failure = /already|registered/i.test(error.message)
-        ? 'This email may already have an account. Use “Reset password” to check access.'
-        : error.message;
+    } catch (e: unknown) {
+      fails.push(
+        `${teacher.name}: ${
+          e instanceof Error ? e.message : 'Unknown invitation error'
+        }`
+      );
     }
-  } catch (e: unknown) {
-    failure =
-      e instanceof Error
-        ? e.message
-        : 'Could not send the invitation. Please try again.';
-  }
-
-  if (failure) {
-    console.error('[inviteTeacher] Invitation failed:', {
-      teacherId: tc.id,
-      email: tc.email,
-      reason: failure,
-    });
-
-    return go(failure, true);
   }
 
   revalidatePath('/admin/teachers');
-  return go(`Invitation sent to ${tc.email}.`);
+
+  const limited = fails.some((message) =>
+    /rate limit|too many/i.test(message)
+  );
+
+  const result =
+    `${ok} invitation(s) sent` +
+    (fails.length
+      ? `, ${fails.length} failed (first: ${fails[0]})`
+      : '') +
+    (limited
+      ? '. Supabase email rate limit reached. Configure SMTP or send remaining invitations later.'
+      : '');
+
+  return go(result, ok === 0 && fails.length > 0);
 }
+
