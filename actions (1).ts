@@ -59,8 +59,11 @@ export async function inviteTeacher(fd: FormData) {
         else note = ' (this email already had a login, so a set-password link was sent)';
       } else failure = /rate limit|too many/i.test(error.message) ? 'Supabase email limit reached. Wait about an hour, or set up SMTP in Supabase (Authentication → SMTP).' : error.message;
     }
-  } catch (e: any) { failure = e?.message || 'Could not send the invitation.'; }
-  if (failure) return go(failure, true);
+  } catch (e: any) {
+    if (e?.digest?.toString().startsWith('NEXT_REDIRECT')) throw e;
+    failure = e?.message || 'Could not send the invitation.';
+  }
+  if (failure) { console.error('[invite] failed', { teacherId: tc.id, reason: failure }); return go(failure, true); }
   revalidatePath('/admin/teachers');
   return go(`Invitation sent to ${tc.email}${note}.`);
 }
@@ -90,3 +93,4 @@ export async function inviteAllTeachers() {
   const limited = fails.some((f) => /rate limit|too many/i.test(f));
   return go(`${ok} invitation(s) sent${fails.length ? `, ${fails.length} failed (first: ${fails[0]})` : ''}.${limited ? ' Supabase limits how many emails it sends per hour on the free built-in mail service; set up your own SMTP in Supabase (Authentication → SMTP) or send the rest later.' : ''}`, ok === 0 && fails.length > 0);
 }
+
