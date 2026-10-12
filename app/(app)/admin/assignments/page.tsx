@@ -4,7 +4,6 @@ import { requireAdmin, sessionAndExams } from "@/lib/auth";
 import { fetchAll } from "@/lib/db";
 import Flash from "@/components/Flash";
 import {
-  groupKey,
   groupLabel,
   groupSections,
 } from "@/lib/assignGroups";
@@ -82,9 +81,46 @@ export default async function Assignments({
     teachers.find((t: any) => t.id === searchParams.teacher)?.id ||
     teachers[0]?.id;
 
-  const groups = groupSections(sections as any);
+  // Merge display groups with the same visible class label.
+  // Keep all real class_section IDs for saving assignments.
+  const rawGroups = groupSections(sections as any);
+  const groupMap = new Map<string, {
+    key: string;
+    label: string;
+    class_id: number;
+    ids: string[];
+    streams: string[];
+  }>();
 
-  type AssignmentRow = {
+  for (const group of rawGroups) {
+    const key = `${group.class_id}|${group.label.trim().toLowerCase()}`;
+    const current = groupMap.get(key);
+
+    if (current) {
+      for (const id of group.ids) {
+        if (!current.ids.includes(id)) current.ids.push(id);
+      }
+      for (const stream of group.streams) {
+        if (!current.streams.includes(stream)) {
+          current.streams.push(stream);
+        }
+      }
+    } else {
+      groupMap.set(key, {
+        ...group,
+        ids: [...group.ids],
+        streams: [...group.streams],
+      });
+    }
+  }
+
+  const groups = [...groupMap.values()].sort(
+    (a, b) =>
+      a.class_id - b.class_id ||
+      a.label.localeCompare(b.label)
+  );
+
+  type Row = {
     ids: string[];
     label: string;
     class_id: number;
@@ -93,8 +129,8 @@ export default async function Assignments({
     streams: string[];
   };
 
-  const collapse = (list: any[]): AssignmentRow[] => {
-    const map = new Map<string, AssignmentRow>();
+  const collapse = (list: any[]): Row[] => {
+    const map = new Map<string, Row>();
 
     for (const assignment of list) {
       const cs = assignment.class_sections;
@@ -105,11 +141,12 @@ export default async function Assignments({
         assignment.class_subjects?.subjects?.name ||
         "";
 
-      const key = `${groupKey(cs)}|${assignment.role}|${subject}`;
+      const label = groupLabel(cs);
+      const key = `${cs.class_id}|${label}|${assignment.role}|${subject}`;
 
       const row = map.get(key) || {
         ids: [],
-        label: groupLabel(cs),
+        label,
         class_id: cs.class_id,
         role: assignment.role,
         subject,
@@ -142,24 +179,24 @@ export default async function Assignments({
     (all as any[]).filter((a) => a.teacher_id === tid)
   );
 
-  const overviewMap = new Map<
-    string,
-    {
-      label: string;
-      class_id: number;
-      ct: string[];
-      st: string[];
-    }
-  >();
+  // Overview combines the same subject and teacher across
+  // multiple stream-specific records into one display entry.
+  const overviewMap = new Map<string, {
+    label: string;
+    class_id: number;
+    ct: string[];
+    st: string[];
+  }>();
 
-  (all as any[]).forEach((assignment) => {
+  for (const assignment of all as any[]) {
     const cs = assignment.class_sections;
-    if (!cs) return;
+    if (!cs) continue;
 
-    const key = groupKey(cs);
+    const label = groupLabel(cs);
+    const key = `${cs.class_id}|${label}`;
 
     const row = overviewMap.get(key) || {
-      label: groupLabel(cs),
+      label,
       class_id: cs.class_id,
       ct: [],
       st: [],
@@ -172,17 +209,16 @@ export default async function Assignments({
       "Subject";
 
     if (assignment.role === "CLASS") {
-      if (!row.ct.includes(teacherName)) row.ct.push(teacherName);
+      if (!row.ct.includes(teacherName)) {
+        row.ct.push(teacherName);
+      }
     } else {
-      const description =
-        `${subject}` +
-        `${cs.stream_id && cs.streams?.name ? ` [${cs.streams.name}]` : ""}: ${teacherName}`;
-
-      if (!row.st.includes(description)) row.st.push(description);
+      const entry = `${subject}: ${teacherName}`;
+      if (!row.st.includes(entry)) row.st.push(entry);
     }
 
     overviewMap.set(key, row);
-  });
+  }
 
   const overview = [...overviewMap.values()].sort(
     (a, b) =>
@@ -215,11 +251,9 @@ export default async function Assignments({
   const ClassChoices = (
     <div className="mb-3">
       <div className="muted mb-2">
-        Select class/sections. For XI–XII, select XI-A or XII-A
-        normally; the stream dropdown below determines which
-        stream receives the subject assignment.
+        Select one or more classes/sections.
+        XI–XII selections include their underlying stream sections.
       </div>
-
       <div>
         {groups.map((group) => (
           <label key={group.key} className="pick">
@@ -229,41 +263,6 @@ export default async function Assignments({
               value={group.ids.join(",")}
             />
             {" "}{group.label}
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-
-  const ClassTeacherChoices = (
-    <div className="mb-3">
-      <div className="muted mb-2">
-        Select the whole class/section. For XI–XII, one selection
-        covers every underlying stream section.
-      </div>
-
-      <div>
-        {groups.map((group) => (
-          <label
-            key={group.key}
-            className="pick"
-            title={
-              group.streams.length
-                ? `Includes: ${group.streams.join(", ")}`
-                : undefined
-            }
-          >
-            <input
-              type="checkbox"
-              name="cs"
-              value={group.ids.join(",")}
-            />
-            {" "}{group.label}
-            {group.ids.length > 1 && (
-              <span className="muted">
-                {" "}(all streams)
-              </span>
-            )}
           </label>
         ))}
       </div>
@@ -313,26 +312,12 @@ export default async function Assignments({
         {Teacher}
         {ClassChoices}
 
-        <label className="lbl max-w-sm">
-          Stream (required for XI–XII)
-          <select
-            className="input"
-            name="streamCategory"
-            defaultValue=""
-          >
-            <option value="">Select stream if applicable</option>
-            <option value="Science">Science (PCM / PCB)</option>
-            <option value="Commerce">Commerce</option>
-            <option value="Humanities/Arts">Humanities/Arts</option>
-          </select>
-        </label>
-
-        <div className="mb-3 mt-3">
+        <div className="mb-3">
           <div className="muted mb-2">
-            Individual subjects — select the subjects this teacher
-            teaches. The system will match available class subjects.
+            Select individual subjects. The system will assign
+            the teacher wherever the selected subject is configured
+            in the selected classes.
           </div>
-
           <div>
             {subjectNames.map((name) => (
               <label key={name} className="pick">
@@ -356,7 +341,9 @@ export default async function Assignments({
           </select>
         </label>
 
-        <button className="btn">Assign as subject teacher</button>
+        <button className="btn">
+          Assign as subject teacher
+        </button>
       </form>
 
       <form action={assignClassTeacher} className="card">
@@ -368,15 +355,7 @@ export default async function Assignments({
         </h2>
 
         {Teacher}
-        {ClassTeacherChoices}
-
-        <label className="lbl max-w-sm">
-          If the class already has a class teacher
-          <select className="input" name="mode" defaultValue="skip">
-            <option value="skip">Skip</option>
-            <option value="replace">Replace</option>
-          </select>
-        </label>
+        {ClassChoices}
 
         <button className="btn btn-sec">
           Assign as class teacher
@@ -433,7 +412,6 @@ export default async function Assignments({
                   </td>
                 </tr>
               ))}
-
               {mine.length === 0 && (
                 <tr>
                   <td colSpan={5} className="muted">
@@ -448,7 +426,6 @@ export default async function Assignments({
 
       <div className="card">
         <h2 className="h3">Who teaches what</h2>
-
         <div className="tw">
           <table className="t">
             <thead>
@@ -468,7 +445,6 @@ export default async function Assignments({
                   </td>
                 </tr>
               ))}
-
               {overview.length === 0 && (
                 <tr>
                   <td colSpan={3} className="muted">
