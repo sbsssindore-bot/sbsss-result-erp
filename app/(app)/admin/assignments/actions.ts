@@ -8,7 +8,6 @@ import { friendlyError, fetchAll } from "@/lib/db";
 import {
   parseIds,
   planSubjectAssignments,
-  streamMatchesCategory,
 } from "@/lib/assignGroups";
 
 const done = (
@@ -25,14 +24,14 @@ export async function assignSubjectTeacher(fd: FormData) {
   const { session } = await sessionAndExams(sb);
 
   const teacher = String(fd.get("teacher") || "");
-  const mode = String(fd.get("mode") || "skip");
-  const category = String(fd.get("streamCategory") || "");
+  const mode = String(fd.get("mode") || "add");
   const selectedIds = parseIds(fd.getAll("cs"));
   const names = [
     ...new Set(
-      fd.getAll("subj").map((value) =>
-        String(value).trim().toLowerCase()
-      )
+      fd
+        .getAll("subj")
+        .map((value) => String(value).trim().toLowerCase())
+        .filter(Boolean)
     ),
   ];
 
@@ -53,6 +52,8 @@ export async function assignSubjectTeacher(fd: FormData) {
   }
 
   try {
+    // The class checkbox can represent one section or
+    // multiple underlying XI-XII stream sections.
     const sections = await fetchAll((a, b) =>
       sb
         .from("class_sections")
@@ -66,46 +67,19 @@ export async function assignSubjectTeacher(fd: FormData) {
     );
 
     if (!sections.length) {
-      return done(teacher, "No active class sections found.", true);
-    }
-
-    // A stream choice is required only when a selected
-    // section includes XI-XII stream-specific records.
-    const hasStreamSections = sections.some(
-      (section: any) => !!section.stream_id
-    );
-
-    if (
-      hasStreamSections &&
-      !["Science", "Commerce", "Humanities/Arts"].includes(category)
-    ) {
       return done(
         teacher,
-        "Select Science, Commerce or Humanities/Arts for XI-XII.",
+        "No active class sections found.",
         true
       );
     }
 
-    // Keep non-stream classes as selected. For XI-XII,
-    // keep only the stream records matching the dropdown.
-    const applicableSections = (sections as any[]).filter(
-      (section) =>
-        !section.stream_id ||
-        streamMatchesCategory(section.streams?.name, category)
-    );
-
-    if (!applicableSections.length) {
-      return done(
-        teacher,
-        `No class sections match the ${category} stream.`,
-        true
-      );
-    }
-
-    const applicableIds = applicableSections.map(
+    const validIds = (sections as any[]).map(
       (section) => section.id
     );
 
+    // Subjects come from the real active class_subjects
+    // records. No stream dropdown or hardcoded stream choice.
     const subs = await fetchAll((a, b) =>
       sb
         .from("class_subjects")
@@ -121,10 +95,12 @@ export async function assignSubjectTeacher(fd: FormData) {
     const existing = await fetchAll((a, b) =>
       sb
         .from("teacher_assignments")
-        .select("id,teacher_id,class_section_id,class_subject_id")
+        .select(
+          "id,teacher_id,class_section_id,class_subject_id"
+        )
         .eq("session_id", session.id)
         .eq("role", "SUBJECT")
-        .in("class_section_id", applicableIds)
+        .in("class_section_id", validIds)
         .range(a, b)
     );
 
@@ -135,7 +111,7 @@ export async function assignSubjectTeacher(fd: FormData) {
       dup,
       conflicts,
     } = planSubjectAssignments({
-      sections: applicableSections as any,
+      sections: sections as any,
       subs: subs as any,
       existing: existing as any,
       names,
@@ -167,14 +143,17 @@ export async function assignSubjectTeacher(fd: FormData) {
     }
 
     revalidatePath("/admin/assignments");
+    revalidatePath("/teacher/marks");
 
     const messages = [`${add.length} assignment(s) added`];
 
-    if (dup) messages.push(`${dup} already existed`);
+    if (dup) {
+      messages.push(`${dup} already existed`);
+    }
 
     if (skippedMissing) {
       messages.push(
-        `${skippedMissing} skipped because the subject is not offered in that class/stream`
+        `${skippedMissing} skipped because the subject is not configured for that class/stream`
       );
     }
 
@@ -190,7 +169,10 @@ export async function assignSubjectTeacher(fd: FormData) {
       add.length === 0 && dup === 0
     );
   } catch (error: any) {
-    if (error?.digest?.startsWith?.("NEXT_REDIRECT")) throw error;
+    if (error?.digest?.startsWith?.("NEXT_REDIRECT")) {
+      throw error;
+    }
+
     return done(teacher, friendlyError(error), true);
   }
 }
@@ -208,7 +190,11 @@ export async function assignClassTeacher(fd: FormData) {
   }
 
   if (!ids.length) {
-    return done(teacher, "Select at least one class section.", true);
+    return done(
+      teacher,
+      "Select at least one class/section.",
+      true
+    );
   }
 
   if (!["skip", "replace"].includes(mode)) {
@@ -226,10 +212,16 @@ export async function assignClassTeacher(fd: FormData) {
         .range(a, b)
     );
 
-    const validIds = sections.map((section: any) => section.id);
+    const validIds = sections.map(
+      (section: any) => section.id
+    );
 
     if (!validIds.length) {
-      return done(teacher, "No active class sections found.", true);
+      return done(
+        teacher,
+        "No active class sections found.",
+        true
+      );
     }
 
     const existing = await fetchAll((a, b) =>
@@ -297,29 +289,39 @@ export async function assignClassTeacher(fd: FormData) {
 
     revalidatePath("/admin/assignments");
 
+    const message =
+      `${add.length} class teacher assignment(s) added; ` +
+      `${dup} already existed; ` +
+      `${mode === "skip" ? `${conflicts} existing class teacher conflict(s) skipped.` : "replacement completed."}`;
+
     return done(
       teacher,
-      `${add.length} class teacher assignment(s) added; ${dup} already existed; ${mode === "skip" ? conflicts + " existing class teacher conflict(s) skipped" : "replacement completed"}.`,
+      message,
       add.length === 0 && dup === 0
     );
   } catch (error: any) {
-    if (error?.digest?.startsWith?.("NEXT_REDIRECT")) throw error;
+    if (error?.digest?.startsWith?.("NEXT_REDIRECT")) {
+      throw error;
+    }
+
     return done(teacher, friendlyError(error), true);
   }
 }
 
 export async function removeAssignment(fd: FormData) {
   const { sb } = await requireAdmin();
+  const { session } = await sessionAndExams(sb);
   const teacher = String(fd.get("teacher") || "");
   const ids = parseIds([String(fd.get("id") || "")]);
 
-  if (!ids.length) {
+  if (!session || !ids.length) {
     return done(teacher, "No assignment selected.", true);
   }
 
   const { error } = await sb
     .from("teacher_assignments")
     .delete()
+    .eq("session_id", session.id)
     .in("id", ids);
 
   revalidatePath("/admin/assignments");
