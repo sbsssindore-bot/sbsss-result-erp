@@ -144,6 +144,8 @@ export async function assignSubjectTeacher(fd: FormData) {
 
     revalidatePath("/admin/assignments");
     revalidatePath("/teacher/marks");
+    revalidatePath("/marks");
+    revalidatePath("/teacher");
 
     const messages = [`${add.length} assignment(s) added`];
 
@@ -288,6 +290,8 @@ export async function assignClassTeacher(fd: FormData) {
     }
 
     revalidatePath("/admin/assignments");
+    revalidatePath("/class-entry");
+    revalidatePath("/teacher");
 
     const message =
       `${add.length} class teacher assignment(s) added; ` +
@@ -325,6 +329,9 @@ export async function removeAssignment(fd: FormData) {
     .in("id", ids);
 
   revalidatePath("/admin/assignments");
+  revalidatePath("/class-entry");
+  revalidatePath("/marks");
+  revalidatePath("/teacher");
 
   return done(
     teacher,
