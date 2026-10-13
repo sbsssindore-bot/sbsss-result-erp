@@ -339,3 +339,49 @@ export async function removeAssignment(fd: FormData) {
     !!error
   );
 }
+
+
+export async function assignGradeTeacher(fd: FormData) {
+  const { sb } = await requireAdmin();
+  const { session } = await sessionAndExams(sb);
+  const teacher = String(fd.get("grade_teacher") || "");
+  const classId = String(fd.get("grade_class") || "");
+  const areaId = String(fd.get("grade_area") || "");
+  if (!teacher || !classId || !areaId || !session) {
+    return done(teacher, "Choose a teacher, class, and activity.", true);
+  }
+  try {
+    const [{ data: teacherRow, error: te }, { data: area, error: ae }] = await Promise.all([
+      sb.from("teachers").select("id").eq("id", teacher).maybeSingle(),
+      sb.from("co_scholastic_areas").select("id,class_id,session_id").eq("id", areaId).maybeSingle(),
+    ]);
+    if (te || ae) return done(teacher, friendlyError(te || ae), true);
+    if (!teacherRow || !area || area.class_id !== classId || area.session_id !== session.id) {
+      return done(teacher, "Selected activity does not belong to this class/session.", true);
+    }
+    const { error } = await sb.from("teacher_grade_assignments").upsert({
+      session_id: session.id, teacher_id: teacher, class_id: classId, area_id: areaId
+    }, { onConflict: "session_id,teacher_id,class_id,area_id", ignoreDuplicates: true });
+    if (error) return done(teacher, friendlyError(error), true);
+    revalidatePath("/admin/assignments");
+    revalidatePath("/class-entry");
+    revalidatePath("/teacher");
+    return done(teacher, "Activity grade teacher assigned.");
+  } catch (error: any) {
+    if (error?.digest?.startsWith?.("NEXT_REDIRECT")) throw error;
+    return done(teacher, friendlyError(error), true);
+  }
+}
+
+export async function removeGradeAssignment(fd: FormData) {
+  const { sb } = await requireAdmin();
+  const { session } = await sessionAndExams(sb);
+  const teacher = String(fd.get("teacher") || "");
+  const id = String(fd.get("id") || "");
+  if (!session || !id) return done(teacher, "No grade assignment selected.", true);
+  const { error } = await sb.from("teacher_grade_assignments").delete().eq("session_id", session.id).eq("id", id);
+  revalidatePath("/admin/assignments");
+  revalidatePath("/class-entry");
+  revalidatePath("/teacher");
+  return done(teacher, error ? friendlyError(error) : "Activity grade assignment removed.", !!error);
+}
