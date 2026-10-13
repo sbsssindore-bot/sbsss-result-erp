@@ -396,12 +396,18 @@ export default async function Assignments({
             ))}
           </div>
         </div>
-        <label className="lbl max-w-sm">Grade / Activity
-          <select className="input" name="grade_activity" required defaultValue=""><option value="" disabled>Select activity</option>
-            {[...new Set(gradeAreas.map((a: any) => (a.display_label || a.name || "").trim()).filter(Boolean))].sort((a: string, b: string) => a.localeCompare(b)).map((activity: string) => <option key={activity} value={activity}>{activity}</option>)}
-          </select>
-        </label>
-        <button className="btn">Assign activity to selected classes</button>
+        <div className="mb-3">
+          <div className="lbl">Grade / Activities — select one or more</div>
+          <div className="muted mb-2">Ek hi teacher ko Dance, Music ya multiple activities ek saath assign kar sakte hain.</div>
+          <div>
+            {[...new Set(gradeAreas.map((a: any) => (a.display_label || a.name || "").trim()).filter(Boolean))].sort((a: string, b: string) => a.localeCompare(b)).map((activity: string) => (
+              <label key={activity} className="pick">
+                <input type="checkbox" name="grade_activities" value={activity} />{" "}{activity}
+              </label>
+            ))}
+          </div>
+        </div>
+        <button className="btn">Assign selected activities to selected classes</button>
         <h3 className="h3 mt-4">Current activity grade assignments</h3>
         <div className="tw"><table className="t"><thead><tr><th>Class</th><th>Activity</th><th>Teacher</th></tr></thead><tbody>
           {gradeAssignments.map((a: any) => <tr key={a.id}><td>{a.classes?.roman || "—"}</td><td>{a.co_scholastic_areas?.display_label || a.co_scholastic_areas?.name || "—"}</td><td>{a.teachers?.name || "—"}</td></tr>)}
