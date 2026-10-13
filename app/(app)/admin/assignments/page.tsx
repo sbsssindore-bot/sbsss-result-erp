@@ -67,6 +67,17 @@ export default async function Assignments({
     ),
   ].sort((a, b) => a.localeCompare(b));
 
+  const gradeAreas = await fetchAll((a, b) =>
+    sb.from("co_scholastic_areas")
+      .select("id,name,display_label,class_id,session_id")
+      .eq("session_id", session.id)
+      .range(a, b)
+  );
+
+  const classRows = await fetchAll((a, b) =>
+    sb.from("classes").select("id,roman").order("sort_order").range(a, b)
+  );
+
   const all = await fetchAll((a, b) =>
     sb
       .from("teacher_assignments")
