@@ -11,9 +11,8 @@ export default async function Reports({ searchParams }: { searchParams: { exam?:
   const sections = await fetchAll((a, b) => sb.from('class_sections').select('id,label,class_id').eq('session_id', session.id).eq('status', 'ACTIVE').order('class_id').order('label').range(a, b));
   const legacySection = sections.find((s: any) => s.id === searchParams.cs);
   const selectedClassId = searchParams.class_id ? Number(searchParams.class_id) : legacySection?.class_id;
-  const classOptions = Array.from(new Map(sections.map((s: any) => [Number(s.class_id), Number(s.class_id)])).values())
-    .sort((a, b) => a - b)
-    .map((classId) => ({
+  const classIds = [...new Set(sections.map((s: any) => Number(s.class_id)))].sort((a, b) => a - b);
+  const classOptions = classIds.map((classId) => ({
       id: classId,
       label: classId >= 1 && classId <= 12 ? ROMAN[classId] : String(classId),
       sections: sections.filter((s: any) => Number(s.class_id) === classId),
