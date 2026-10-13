@@ -10,7 +10,9 @@ import {
 import {
   assignSubjectTeacher,
   assignClassTeacher,
-  removeAssignment,\n  assignGradeTeacher,\n  removeGradeAssignment,
+  removeAssignment,
+  assignGradeTeacher,
+  removeGradeAssignment,
 } from "./actions";
 
 export default async function Assignments({
@@ -373,6 +375,32 @@ export default async function Assignments({
         <button className="btn btn-sec">
           Assign as class teacher — enable grades access
         </button>
+      </form>
+
+      <form action={assignGradeTeacher} className="card">
+        <h2 className="h3">C. Activity grade teacher</h2>
+        <p className="muted mb-3">Har class ke liye Value Education, General Knowledge, Art, Music, Dance ya configured activity ka specific teacher assign karein.</p>
+        <label className="lbl max-w-sm">Teacher
+          <select className="input" name="grade_teacher" required defaultValue=""><option value="" disabled>Select teacher</option>
+            {teachers.filter((t: any) => t.status === "ACTIVE").map((t: any) => <option key={t.id} value={t.id}>{t.name} ({t.employee_id})</option>)}
+          </select>
+        </label>
+        <label className="lbl max-w-sm">Class
+          <select className="input" name="grade_class" required defaultValue=""><option value="" disabled>Select class</option>
+            {classRows.map((cl: any) => <option key={cl.id} value={cl.id}>{cl.roman}</option>)}
+          </select>
+        </label>
+        <label className="lbl max-w-sm">Grade / Activity
+          <select className="input" name="grade_area" required defaultValue=""><option value="" disabled>Select activity</option>
+            {gradeAreas.map((a: any) => <option key={a.id} value={a.id}>{a.display_label || a.name}</option>)}
+          </select>
+        </label>
+        <button className="btn">Assign activity grades</button>
+        <h3 className="h3 mt-4">Current activity grade assignments</h3>
+        <div className="tw"><table className="t"><thead><tr><th>Class</th><th>Activity</th><th>Teacher</th></tr></thead><tbody>
+          {gradeAssignments.map((a: any) => <tr key={a.id}><td>{a.classes?.roman || "—"}</td><td>{a.co_scholastic_areas?.display_label || a.co_scholastic_areas?.name || "—"}</td><td>{a.teachers?.name || "—"}</td></tr>)}
+          {gradeAssignments.length === 0 && <tr><td colSpan={3} className="muted">No activity grade assignments yet.</td></tr>}
+        </tbody></table></div>
       </form>
 
       <div className="card">
