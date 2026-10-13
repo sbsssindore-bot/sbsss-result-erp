@@ -77,7 +77,7 @@ export default async function Assignments({
   );
 
   const classRows = await fetchAll((a, b) =>
-    sb.from("classes").select("id,roman").order("sort_order").range(a, b)
+    sb.from("classes").select("id,roman").order("id").range(a, b)
   );
 
   const gradeAssignments = await fetchAll((a, b) =>
@@ -392,7 +392,7 @@ export default async function Assignments({
         </label>
         <label className="lbl max-w-sm">Grade / Activity
           <select className="input" name="grade_area" required defaultValue=""><option value="" disabled>Select activity</option>
-            {gradeAreas.map((a: any) => <option key={a.id} value={a.id}>{a.display_label || a.name}</option>)}
+            {gradeAreas.map((a: any) => <option key={a.id} value={a.id}>{`Class ${classRows.find((cl: any) => cl.id === a.class_id)?.roman || a.class_id} — ${a.display_label || a.name}`}</option>)}
           </select>
         </label>
         <button className="btn">Assign activity grades</button>
