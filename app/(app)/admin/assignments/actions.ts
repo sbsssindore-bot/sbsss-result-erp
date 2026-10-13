@@ -345,28 +345,56 @@ export async function assignGradeTeacher(fd: FormData) {
   const { sb } = await requireAdmin();
   const { session } = await sessionAndExams(sb);
   const teacher = String(fd.get("grade_teacher") || "");
-  const classId = String(fd.get("grade_class") || "");
-  const areaId = String(fd.get("grade_area") || "");
-  if (!teacher || !classId || !areaId || !session) {
-    return done(teacher, "Choose a teacher, class, and activity.", true);
+  const classIds = [...new Set(fd.getAll("grade_classes").map((v) => String(v).trim()).filter(Boolean))];
+  const activity = String(fd.get("grade_activity") || "").trim();
+
+  if (!teacher || !classIds.length || !activity || !session) {
+    return done(teacher, "Choose a teacher, at least one class, and an activity.", true);
   }
+
   try {
-    const [{ data: teacherRow, error: te }, { data: area, error: ae }] = await Promise.all([
+    const [{ data: teacherRow, error: te }, { data: areas, error: ae }] = await Promise.all([
       sb.from("teachers").select("id").eq("id", teacher).maybeSingle(),
-      sb.from("co_scholastic_areas").select("id,class_id,session_id").eq("id", areaId).maybeSingle(),
+      sb.from("co_scholastic_areas").select("id,name,display_label,class_id,session_id")
+        .eq("session_id", session.id).in("class_id", classIds.map(Number)),
     ]);
+
     if (te || ae) return done(teacher, friendlyError(te || ae), true);
-    if (!teacherRow || !area || Number(area.class_id) !== Number(classId) || area.session_id !== session.id) {
-      return done(teacher, "Selected activity does not belong to this class/session.", true);
+    if (!teacherRow) return done(teacher, "Selected teacher was not found.", true);
+
+    const normalize = (value: unknown) => String(value || "").trim().toLocaleLowerCase();
+    const matching = (areas || []).filter((area: any) =>
+      normalize(area.display_label || area.name) === normalize(activity) &&
+      classIds.includes(String(area.class_id)) &&
+      area.session_id === session.id
+    );
+
+    if (!matching.length) {
+      return done(teacher, "This activity is not configured for any of the selected classes.", true);
     }
-    const { error } = await sb.from("teacher_grade_assignments").upsert({
-      session_id: session.id, teacher_id: teacher, class_id: Number(classId), area_id: areaId
-    }, { onConflict: "session_id,teacher_id,class_id,area_id", ignoreDuplicates: true });
+
+    const rows = matching.map((area: any) => ({
+      session_id: session.id,
+      teacher_id: teacher,
+      class_id: Number(area.class_id),
+      area_id: area.id,
+    }));
+
+    const { error } = await sb.from("teacher_grade_assignments").upsert(rows, {
+      onConflict: "session_id,teacher_id,class_id,area_id",
+      ignoreDuplicates: true,
+    });
     if (error) return done(teacher, friendlyError(error), true);
+
+    const matchedClasses = new Set(matching.map((area: any) => String(area.class_id))).size;
+    const skipped = classIds.length - matchedClasses;
     revalidatePath("/admin/assignments");
     revalidatePath("/class-entry");
     revalidatePath("/teacher");
-    return done(teacher, "Activity grade teacher assigned.");
+    return done(
+      teacher,
+      `Activity assigned to ${matchedClasses} class(es)${skipped ? `; ${skipped} selected class(es) skipped because this activity is not configured there` : ""}.`
+    );
   } catch (error: any) {
     if (error?.digest?.startsWith?.("NEXT_REDIRECT")) throw error;
     return done(teacher, friendlyError(error), true);
