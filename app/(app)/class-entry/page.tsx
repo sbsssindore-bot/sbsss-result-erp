@@ -11,10 +11,20 @@ export default async function ClassEntry({ searchParams }: { searchParams: { exa
   const { session, exams, exam } = await sessionAndExams(sb, { exam: searchParams.exam });
   if (!session || !exam) return <div className="card"><h1 className="h2">Attendance &amp; grades</h1><p className="muted">No examination is available.</p></div>;
   let sections: any[] = [];
-  if (isAdmin) sections = await fetchAll((a, b) => sb.from('class_sections').select('id,label,class_id').eq('session_id', session.id).eq('status', 'ACTIVE').order('class_id').order('label').range(a, b));
+  let assignedGradeAreas: any[] = [];
+  let gradeOnlyTeacher = false;
+  if (isAdmin) sections = await fetchAll((a, b) => sb.from('class_sections').select('id,label,class_id,session_id').eq('session_id', session.id).eq('status', 'ACTIVE').order('class_id').order('label').range(a, b));
   else if (teacher) {
-    const { data } = await sb.from('teacher_assignments').select('class_sections(id,label,class_id)').eq('teacher_id', teacher.id).eq('session_id', session.id).eq('role', 'CLASS');
-    sections = (data || []).map((x: any) => x.class_sections).filter(Boolean);
+    const [{ data: classData }, { data: gradeData }] = await Promise.all([
+      sb.from('teacher_assignments').select('class_sections(id,label,class_id,session_id)').eq('teacher_id', teacher.id).eq('session_id', session.id).eq('role', 'CLASS'),
+      sb.from('teacher_grade_assignments').select('class_id,area_id').eq('teacher_id', teacher.id).eq('session_id', session.id)
+    ]);
+    const classSections = (classData || []).map((x: any) => x.class_sections).filter(Boolean);
+    assignedGradeAreas = gradeData || [];
+    const gradeClassIds = [...new Set(assignedGradeAreas.map((x: any) => x.class_id))];
+    const gradeSections = gradeClassIds.length ? await fetchAll((a, b) => sb.from('class_sections').select('id,label,class_id,session_id').eq('session_id', session.id).eq('status', 'ACTIVE').in('class_id', gradeClassIds).order('class_id').order('label').range(a, b)) : [];
+    sections = [...new Map([...classSections, ...gradeSections].map((s: any) => [s.id, s])).values()];
+    gradeOnlyTeacher = classSections.length === 0 && assignedGradeAreas.length > 0;
   }
   const csId = sections.find((s) => s.id === searchParams.cs)?.id as string | undefined;
   const cs = sections.find((s) => s.id === csId);
@@ -41,7 +51,7 @@ export default async function ClassEntry({ searchParams }: { searchParams: { exa
     rem.push(...(await sb.from('report_remarks').select('*').eq('examination_id', exam.id).in('enrollment_id', part)).data || []);
   }
   const { data: areaRows } = await sb.from('co_scholastic_areas').select('*').eq('session_id', session.id).eq('class_id', cs.class_id).order('display_order');
-  const areas = (areaRows || []).map((a: any) => ({ id: a.id, label: a.display_label || a.name }));
+  const areas = (areaRows || []).filter((a: any) => isAdmin || !teacher || !assignedGradeAreas.length || !gradeOnlyTeacher || assignedGradeAreas.some((x: any) => x.area_id === a.id && x.class_id === cs.class_id)).map((a: any) => ({ id: a.id, label: a.display_label || a.name }));
   const { data: gv } = await sb.from('co_grade_values').select('value').order('sort_order');
   const { data: sts } = await sb.from('result_statuses').select('code').order('sort_order');
   const { data: rr } = exam.result_rule_id ? await sb.from('result_rules').select('rule').eq('id', exam.result_rule_id).maybeSingle() : { data: null as any };
@@ -65,7 +75,7 @@ export default async function ClassEntry({ searchParams }: { searchParams: { exa
           {status !== 'DRAFT' && <form action={adminSetStatus} className="flex gap-2"><input type="hidden" name="id" value={batch.id} /><input type="hidden" name="to" value="DRAFT" /><input type="hidden" name="back" value={back} /><input name="reason" required placeholder="Reason to unlock / return" className="input !min-h-[36px] !w-56" /><button className="btn btn-sm btn-bad">Unlock / return</button></form>}</div>}
       </div>
       <ClassEntryGrid key={`${exam.id}-${cs.id}-${status}-${batch?.updated_at}`} examId={exam.id} csId={cs.id} rows={rows} areas={areas} gradeValues={(gv || []).map((g: any) => g.value)}
-        statuses={(sts || []).map((s: any) => s.code)} manualStatus={rr?.rule?.mode !== 'auto'} canEdit={canEdit} isAdmin={isAdmin} batchStatus={status} />
+        statuses={(sts || []).map((s: any) => s.code)} manualStatus={rr?.rule?.mode !== 'auto'} canEdit={canEdit && !gradeOnlyTeacher} isAdmin={isAdmin} batchStatus={status} editableAreaIds={gradeOnlyTeacher ? areas.map((a: any) => a.id) : []} gradeOnly={gradeOnlyTeacher} />
     </>
   );
 }
