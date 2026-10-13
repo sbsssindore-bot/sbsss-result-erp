@@ -379,23 +379,29 @@ export default async function Assignments({
 
       <form action={assignGradeTeacher} className="card">
         <h2 className="h3">C. Activity grade teacher</h2>
-        <p className="muted mb-3">Har class ke liye Value Education, General Knowledge, Art, Music, Dance ya configured activity ka specific teacher assign karein.</p>
+        <p className="muted mb-3">Teacher aur activity ek baar select karein, phir jitni classes mein woh activity leta/leti hai un sab ko select karke ek saath assign karein.</p>
         <label className="lbl max-w-sm">Teacher
           <select className="input" name="grade_teacher" required defaultValue=""><option value="" disabled>Select teacher</option>
             {teachers.filter((t: any) => t.status === "ACTIVE").map((t: any) => <option key={t.id} value={t.id}>{t.name} ({t.employee_id})</option>)}
           </select>
         </label>
-        <label className="lbl max-w-sm">Class
-          <select className="input" name="grade_class" required defaultValue=""><option value="" disabled>Select class</option>
-            {classRows.map((cl: any) => <option key={cl.id} value={cl.id}>{cl.roman}</option>)}
-          </select>
-        </label>
+        <div className="mb-3">
+          <div className="lbl">Classes — select all applicable classes</div>
+          <div className="muted mb-2">Ek teacher ko multiple classes assign kar sakte hain.</div>
+          <div>
+            {classRows.map((cl: any) => (
+              <label key={cl.id} className="pick">
+                <input type="checkbox" name="grade_classes" value={cl.id} />{" "}{cl.roman}
+              </label>
+            ))}
+          </div>
+        </div>
         <label className="lbl max-w-sm">Grade / Activity
-          <select className="input" name="grade_area" required defaultValue=""><option value="" disabled>Select activity</option>
-            {gradeAreas.map((a: any) => <option key={a.id} value={a.id}>{`Class ${classRows.find((cl: any) => cl.id === a.class_id)?.roman || a.class_id} — ${a.display_label || a.name}`}</option>)}
+          <select className="input" name="grade_activity" required defaultValue=""><option value="" disabled>Select activity</option>
+            {[...new Set(gradeAreas.map((a: any) => (a.display_label || a.name || "").trim()).filter(Boolean))].sort((a: string, b: string) => a.localeCompare(b)).map((activity: string) => <option key={activity} value={activity}>{activity}</option>)}
           </select>
         </label>
-        <button className="btn">Assign activity grades</button>
+        <button className="btn">Assign activity to selected classes</button>
         <h3 className="h3 mt-4">Current activity grade assignments</h3>
         <div className="tw"><table className="t"><thead><tr><th>Class</th><th>Activity</th><th>Teacher</th></tr></thead><tbody>
           {gradeAssignments.map((a: any) => <tr key={a.id}><td>{a.classes?.roman || "—"}</td><td>{a.co_scholastic_areas?.display_label || a.co_scholastic_areas?.name || "—"}</td><td>{a.teachers?.name || "—"}</td></tr>)}
