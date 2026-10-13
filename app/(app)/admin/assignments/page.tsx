@@ -80,9 +80,14 @@ export default async function Assignments({
     sb.from("classes").select("id,roman").order("id").range(a, b)
   );
 
+  // This new optional feature must not take down the whole assignments page
+  // if its database migration/policy is temporarily unavailable.
   const gradeAssignments = await fetchAll((a, b) =>
     sb.from("teacher_grade_assignments").select("id,teacher_id,class_id,area_id,teachers(name),classes(roman),co_scholastic_areas(name,display_label)").eq("session_id", session.id).range(a, b)
-  );
+  ).catch((error) => {
+    console.error("Could not load activity grade assignments:", error);
+    return [] as any[];
+  });
 
   const all = await fetchAll((a, b) =>
     sb
