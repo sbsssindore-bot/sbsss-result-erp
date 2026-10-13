@@ -18,15 +18,26 @@ export async function saveClassEntry(raw: unknown): Promise<{ ok: boolean; error
   const i = parsed.data;
   const { sb, isAdmin, teacher } = await requireCtx();
   try {
-    // Attendance and class-level entry are restricted to the assigned class teacher.
+    // Class teachers can manage attendance/remarks; activity teachers can edit only assigned grade areas.
+    let isGradeOnlyTeacher = false;
+    let assignedAreaIds: string[] = [];
     if (!isAdmin) {
       if (!teacher) return { ok: false, error: 'Your login is not linked to a teacher record.' };
-      const { data: assignment, error: assignmentError } = await sb
-        .from('teacher_assignments').select('id')
-        .eq('teacher_id', teacher.id).eq('class_section_id', i.csId)
-        .eq('role', 'CLASS').limit(1).maybeSingle();
-      if (assignmentError) return { ok: false, error: friendlyError(assignmentError) };
-      if (!assignment) return { ok: false, error: 'You are not assigned as the class teacher for this class.' };
+      const [{ data: classAssignment, error: classAssignmentError }, { data: gradeAssignments, error: gradeAssignmentError }] = await Promise.all([
+        sb.from('teacher_assignments').select('id').eq('teacher_id', teacher.id).eq('class_section_id', i.csId).eq('role', 'CLASS').limit(1),
+        sb.from('teacher_grade_assignments').select('area_id,class_id').eq('teacher_id', teacher.id).eq('session_id', (await sb.from('class_sections').select('session_id').eq('id', i.csId).maybeSingle()).data?.session_id || '').limit(1000)
+      ]);
+      if (classAssignmentError || gradeAssignmentError) return { ok: false, error: friendlyError(classAssignmentError || gradeAssignmentError) };
+      const { data: targetSection } = await sb.from('class_sections').select('class_id').eq('id', i.csId).maybeSingle();
+      assignedAreaIds = (gradeAssignments || []).filter((a: any) => a.class_id === targetSection?.class_id).map((a: any) => a.area_id);
+      isGradeOnlyTeacher = !classAssignment?.length && assignedAreaIds.length > 0;
+      if (!classAssignment?.length && !isGradeOnlyTeacher) return { ok: false, error: 'You are not assigned as class teacher or activity grade teacher for this class.' };
+      if (isGradeOnlyTeacher && i.rows.some((r) => r.working != null || r.present != null || r.remarks.trim() !== '' || r.status != null)) {
+        return { ok: false, error: 'Activity grade teachers can edit only their assigned activity grades.' };
+      }
+      if (isGradeOnlyTeacher && i.rows.some((r) => Object.keys(r.co).some((area) => !assignedAreaIds.includes(area)))) {
+        return { ok: false, error: 'You can edit only the activities assigned to you.' };
+      }
     }
 
     const [{ data: exam, error: examError }, { data: section, error: sectionError }] = await Promise.all([
@@ -64,7 +75,7 @@ export async function saveClassEntry(raw: unknown): Promise<{ ok: boolean; error
     }
     const base = { batch_id: batch.id, examination_id: i.examId };
 
-    const att = i.rows.filter((r) => r.working != null || r.present != null).map((r) => ({ ...base, enrollment_id: r.e, working_days: r.working, present_days: r.present }));
+    const att = isGradeOnlyTeacher ? [] : i.rows.filter((r) => r.working != null || r.present != null).map((r) => ({ ...base, enrollment_id: r.e, working_days: r.working, present_days: r.present }));
     if (att.length) { const { error } = await sb.from('attendance').upsert(att, { onConflict: 'enrollment_id,examination_id' }); if (error) return { ok: false, error: friendlyError(error) }; }
 
     const { data: areaRows, error: areaError } = await sb.from('co_scholastic_areas').select('id').eq('session_id', section.session_id).eq('class_id', section.class_id);
@@ -75,14 +86,14 @@ export async function saveClassEntry(raw: unknown): Promise<{ ok: boolean; error
     }
 
     const co: any[] = [], coDel: { e: string; a: string }[] = [];
-    for (const r of i.rows) for (const [area, g] of Object.entries(r.co)) { if (g) co.push({ ...base, enrollment_id: r.e, area_id: area, grade: g }); else coDel.push({ e: r.e, a: area }); }
+    for (const r of i.rows) for (const [area, g] of Object.entries(r.co)) { if (isGradeOnlyTeacher && !assignedAreaIds.includes(area)) continue; if (g) co.push({ ...base, enrollment_id: r.e, area_id: area, grade: g }); else if (!isGradeOnlyTeacher || assignedAreaIds.includes(area)) coDel.push({ e: r.e, a: area }); }
     if (co.length) { const { error } = await sb.from('co_scholastic_marks').upsert(co, { onConflict: 'enrollment_id,examination_id,area_id' }); if (error) return { ok: false, error: friendlyError(error) }; }
     for (const d of coDel) {
       const { error } = await sb.from('co_scholastic_marks').delete().eq('enrollment_id', d.e).eq('examination_id', i.examId).eq('area_id', d.a);
       if (error) return { ok: false, error: friendlyError(error) };
     }
 
-    const rem = i.rows.map((r) => ({ ...base, enrollment_id: r.e, remarks: r.remarks || null, ...(isAdmin ? { result_status: r.status || null } : {}) }));
+    const rem = isGradeOnlyTeacher ? [] : i.rows.map((r) => ({ ...base, enrollment_id: r.e, remarks: r.remarks || null, ...(isAdmin ? { result_status: r.status || null } : {}) }));
     if (rem.length) { const { error } = await sb.from('report_remarks').upsert(rem, { onConflict: 'enrollment_id,examination_id' }); if (error) return { ok: false, error: friendlyError(error) }; }
 
     if (i.submit && ['DRAFT', 'NONE'].includes(batch.status)) {
