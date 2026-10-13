@@ -346,10 +346,10 @@ export async function assignGradeTeacher(fd: FormData) {
   const { session } = await sessionAndExams(sb);
   const teacher = String(fd.get("grade_teacher") || "");
   const classIds = [...new Set(fd.getAll("grade_classes").map((v) => String(v).trim()).filter(Boolean))];
-  const activity = String(fd.get("grade_activity") || "").trim();
+  const activities = [...new Set(fd.getAll("grade_activities").map((v) => String(v).trim()).filter(Boolean))];
 
-  if (!teacher || !classIds.length || !activity || !session) {
-    return done(teacher, "Choose a teacher, at least one class, and an activity.", true);
+  if (!teacher || !classIds.length || !activities.length || !session) {
+    return done(teacher, "Choose a teacher, at least one class, and at least one activity.", true);
   }
 
   try {
@@ -363,14 +363,15 @@ export async function assignGradeTeacher(fd: FormData) {
     if (!teacherRow) return done(teacher, "Selected teacher was not found.", true);
 
     const normalize = (value: unknown) => String(value || "").trim().toLocaleLowerCase();
+    const selectedActivities = new Set(activities.map(normalize));
     const matching = (areas || []).filter((area: any) =>
-      normalize(area.display_label || area.name) === normalize(activity) &&
+      selectedActivities.has(normalize(area.display_label || area.name)) &&
       classIds.includes(String(area.class_id)) &&
       area.session_id === session.id
     );
 
     if (!matching.length) {
-      return done(teacher, "This activity is not configured for any of the selected classes.", true);
+      return done(teacher, "None of the selected activities are configured for the selected classes.", true);
     }
 
     const rows = matching.map((area: any) => ({
@@ -387,13 +388,14 @@ export async function assignGradeTeacher(fd: FormData) {
     if (error) return done(teacher, friendlyError(error), true);
 
     const matchedClasses = new Set(matching.map((area: any) => String(area.class_id))).size;
+    const matchedActivities = new Set(matching.map((area: any) => normalize(area.display_label || area.name))).size;
     const skipped = classIds.length - matchedClasses;
     revalidatePath("/admin/assignments");
     revalidatePath("/class-entry");
     revalidatePath("/teacher");
     return done(
       teacher,
-      `Activity assigned to ${matchedClasses} class(es)${skipped ? `; ${skipped} selected class(es) skipped because this activity is not configured there` : ""}.`
+      `${matchedActivities} activity/activities assigned across ${matchedClasses} class(es)${skipped ? `; ${skipped} selected class(es) had no matching selected activity and were skipped` : ""}.`
     );
   } catch (error: any) {
     if (error?.digest?.startsWith?.("NEXT_REDIRECT")) throw error;
