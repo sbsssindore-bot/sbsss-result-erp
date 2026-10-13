@@ -356,11 +356,11 @@ export async function assignGradeTeacher(fd: FormData) {
       sb.from("co_scholastic_areas").select("id,class_id,session_id").eq("id", areaId).maybeSingle(),
     ]);
     if (te || ae) return done(teacher, friendlyError(te || ae), true);
-    if (!teacherRow || !area || area.class_id !== classId || area.session_id !== session.id) {
+    if (!teacherRow || !area || Number(area.class_id) !== Number(classId) || area.session_id !== session.id) {
       return done(teacher, "Selected activity does not belong to this class/session.", true);
     }
     const { error } = await sb.from("teacher_grade_assignments").upsert({
-      session_id: session.id, teacher_id: teacher, class_id: classId, area_id: areaId
+      session_id: session.id, teacher_id: teacher, class_id: Number(classId), area_id: areaId
     }, { onConflict: "session_id,teacher_id,class_id,area_id", ignoreDuplicates: true });
     if (error) return done(teacher, friendlyError(error), true);
     revalidatePath("/admin/assignments");
