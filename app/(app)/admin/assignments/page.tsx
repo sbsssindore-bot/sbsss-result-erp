@@ -314,9 +314,7 @@ export default async function Assignments({
 
         <div className="mb-3">
           <div className="muted mb-2">
-            Select individual subjects. The system will assign
-            the teacher wherever the selected subject is configured
-            in the selected classes.
+            Select subjects for the selected classes. For different subjects in different classes (for example IX Maths and X English), save each class-subject combination separately.
           </div>
           <div>
             {subjectNames.map((name) => (
@@ -350,7 +348,7 @@ export default async function Assignments({
         <h2 className="h3">
           B. Class teacher{" "}
           <span className="muted">
-            (attendance, co-scholastic grades, remarks)
+            (grants Attendance & Grades access: attendance, co-scholastic grades, remarks)
           </span>
         </h2>
 
@@ -358,7 +356,7 @@ export default async function Assignments({
         {ClassChoices}
 
         <button className="btn btn-sec">
-          Assign as class teacher
+          Assign as class teacher — enable grades access
         </button>
       </form>
 
