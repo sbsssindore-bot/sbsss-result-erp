@@ -21,8 +21,20 @@ export async function GET(req: NextRequest) {
   const examId = sp.get('exam') || '';
   let ids = (sp.get('ids') || '').split(',').filter(Boolean);
   const cs = sp.get('cs');
+  const classIdRaw = sp.get('class_id');
   if (!examId) return new Response('Missing examination.', { status: 400 });
-  if (!ids.length && cs) ids = (await fetchAll((a, b) => ctx.sb.from('student_class_enrollments').select('id').eq('class_section_id', cs).eq('status', 'ACTIVE').order('roll_number').range(a, b))).map((e: any) => e.id);
+  if (!ids.length && classIdRaw) {
+    const classId = Number(classIdRaw);
+    if (!Number.isInteger(classId) || classId < 1 || classId > 12) return new Response('Invalid class.', { status: 400 });
+    const { data: exam, error } = await ctx.sb.from('examinations').select('session_id').eq('id', examId).maybeSingle();
+    if (error) return new Response(error.message, { status: 500 });
+    if (!exam) return new Response('Examination not found.', { status: 404 });
+    const sections = await fetchAll((a, b) => ctx.sb.from('class_sections').select('id').eq('session_id', exam.session_id).eq('class_id', classId).eq('status', 'ACTIVE').range(a, b));
+    const sectionIds = sections.map((s: any) => s.id);
+    if (sectionIds.length) ids = (await fetchAll((a, b) => ctx.sb.from('student_class_enrollments').select('id,roll_number').in('class_section_id', sectionIds).eq('status', 'ACTIVE').order('roll_number').range(a, b))).map((e: any) => e.id);
+  } else if (!ids.length && cs) {
+    ids = (await fetchAll((a, b) => ctx.sb.from('student_class_enrollments').select('id').eq('class_section_id', cs).eq('status', 'ACTIVE').order('roll_number').range(a, b))).map((e: any) => e.id);
+  }
   if (!ids.length) return new Response('No students selected.', { status: 400 });
   ids = ids.slice(0, MAX_CARDS);
   try {
