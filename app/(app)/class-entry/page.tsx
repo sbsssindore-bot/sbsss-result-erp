@@ -56,7 +56,7 @@ export default async function ClassEntry({ searchParams }: { searchParams: { exa
     rem.push(...(await sb.from('report_remarks').select('*').eq('examination_id', exam.id).in('enrollment_id', part)).data || []);
   }
   const { data: areaRows } = await sb.from('co_scholastic_areas').select('*').eq('session_id', session.id).eq('class_id', cs.class_id).order('display_order');
-  const areas = (areaRows || []).filter((a: any) => isAdmin || selectedIsClassTeacher || assignedGradeAreaIds.includes(a.id)).map((a: any) => ({ id: a.id, label: a.display_label || a.name }));
+  const areas = (areaRows || []).filter((a: any) => isAdmin || selectedIsClassTeacher || assignedGradeAreas.some((assigned: any) => assigned.area_id === a.id)).map((a: any) => ({ id: a.id, label: a.display_label || a.name }));
   const { data: gv } = await sb.from('co_grade_values').select('value').order('sort_order');
   const { data: sts } = await sb.from('result_statuses').select('code').order('sort_order');
   const { data: rr } = exam.result_rule_id ? await sb.from('result_rules').select('rule').eq('id', exam.result_rule_id).maybeSingle() : { data: null as any };
