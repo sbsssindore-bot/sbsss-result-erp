@@ -78,6 +78,10 @@ export default async function Assignments({
     sb.from("classes").select("id,roman").order("sort_order").range(a, b)
   );
 
+  const gradeAssignments = await fetchAll((a, b) =>
+    sb.from("teacher_grade_assignments").select("id,teacher_id,class_id,area_id,teachers(name),classes(roman),co_scholastic_areas(name,display_label)").eq("session_id", session.id).range(a, b)
+  );
+
   const all = await fetchAll((a, b) =>
     sb
       .from("teacher_assignments")
