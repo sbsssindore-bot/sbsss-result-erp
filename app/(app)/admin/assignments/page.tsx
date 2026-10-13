@@ -10,7 +10,7 @@ import {
 import {
   assignSubjectTeacher,
   assignClassTeacher,
-  removeAssignment,
+  removeAssignment,\n  assignGradeTeacher,\n  removeGradeAssignment,
 } from "./actions";
 
 export default async function Assignments({
