@@ -3,6 +3,7 @@ import { requireCtx, sessionAndExams } from '@/lib/auth';
 import { fetchAll, chunk } from '@/lib/db';
 import { fmtNum } from '@/lib/format';
 import ExamTabs from '@/components/ExamTabs';
+import { groupLabel } from '@/lib/assignGroups';
 import MarksGrid from '@/components/MarksGrid';
 import { adminSetStatus } from '../admin/review/actions';
 
@@ -20,9 +21,12 @@ export default async function MarksPage({ searchParams }: { searchParams: SP }) 
   if (isAdmin) {
     sections = await fetchAll((a, b) => sb.from('class_sections').select('id,label,class_id').eq('session_id', session.id).eq('status', 'ACTIVE').order('class_id').order('label').range(a, b));
   } else if (teacher) {
-    const { data } = await sb.from('teacher_assignments').select('class_section_id,class_subject_id,class_sections(id,label,class_id),class_subjects(id,display_label,display_order)').eq('teacher_id', teacher.id).eq('session_id', session.id).eq('role', 'SUBJECT');
+    const { data } = await sb.from('teacher_assignments').select('class_section_id,class_subject_id,class_sections(id,label,class_id,section_id,stream_id,sections(name),streams(name),classes(roman)),class_subjects(id,display_label,display_order)').eq('teacher_id', teacher.id).eq('session_id', session.id).eq('role', 'SUBJECT');
     const seen = new Set<string>();
-    for (const a of (data || []) as any[]) { if (a.class_sections && !seen.has(a.class_sections.id)) { seen.add(a.class_sections.id); sections.push(a.class_sections); } subjects.push({ ...a.class_subjects, cs: a.class_section_id }); }
+    for (const a of (data || []) as any[]) {
+      if (a.class_sections && !seen.has(a.class_sections.id)) { seen.add(a.class_sections.id); sections.push(a.class_sections); }
+      if (a.class_sections && a.class_subjects) subjects.push({ ...a.class_subjects, cs: a.class_section_id });
+    }
     sections.sort((x, y) => x.class_id - y.class_id || x.label.localeCompare(y.label));
   }
   const csId = searchParams.cs && sections.find((s) => s.id === searchParams.cs) ? searchParams.cs : undefined;
@@ -30,7 +34,19 @@ export default async function MarksPage({ searchParams }: { searchParams: SP }) 
   if (csRow && isAdmin) {
     subjects = (await fetchAll((a, b) => sb.from('class_subjects').select('id,display_label,display_order').eq('session_id', session.id).eq('class_id', csRow.class_id).eq('kind', 'MARKS').eq('status', 'ACTIVE').order('display_order').range(a, b))).map((x: any) => ({ ...x, cs: csId }));
   }
-  const subOptions = subjects.filter((s) => s.cs === csId).sort((a, b) => a.display_order - b.display_order);
+  const displayGroups = isAdmin ? [] : (() => {
+    const map = new Map<string, { label: string; class_id: number; sections: any[] }>();
+    for (const section of sections) {
+      const label = groupLabel(section);
+      const key = `${section.class_id}|${label.toLowerCase()}`;
+      const row = map.get(key) || { label, class_id: section.class_id, sections: [] };
+      if (!row.sections.some((x) => x.id === section.id)) row.sections.push(section);
+      map.set(key, row);
+    }
+    return [...map.values()].sort((a, b) => a.class_id - b.class_id || a.label.localeCompare(b.label));
+  })();
+  const selectedGroup = isAdmin ? undefined : displayGroups.find((g) => g.sections.some((s) => s.id === csId));
+  const subOptions = subjects.filter((s) => isAdmin ? s.cs === csId : selectedGroup?.sections.some((section) => section.id === s.cs)).sort((a, b) => a.display_order - b.display_order || a.display_label.localeCompare(b.display_label));
   const sub = subOptions.find((s) => s.id === searchParams.sub);
   const q = (o: Record<string, string | undefined>) => { const sp = new URLSearchParams(); Object.entries({ exam: ex.id, ...o }).forEach(([k, v]) => v && sp.set(k, v)); return `/marks?${sp}`; };
 
@@ -43,8 +59,8 @@ export default async function MarksPage({ searchParams }: { searchParams: SP }) 
       <div className="card">
         <h2 className="h3">1. Class &amp; section</h2>
         {sections.length === 0 ? <p className="muted">{isAdmin ? 'No class sections yet. Import students first.' : 'No subjects are assigned to you for this session. Ask the administrator.'}</p> :
-          <div className="flex flex-wrap gap-2">{sections.map((s) => <Link key={s.id} href={q({ cs: s.id })} className={`rounded-md border px-3 py-2 text-sm ${s.id === csId ? 'border-ink bg-ink text-white' : 'border-line bg-white'}`}>{s.label}</Link>)}</div>}
-        {csId && <><h2 className="h3 mt-4">2. Subject</h2><div className="flex flex-wrap gap-2">{subOptions.map((s) => <Link key={s.id} href={q({ cs: csId, sub: s.id })} className={`rounded-md border px-3 py-2 text-sm ${s.id === sub?.id ? 'border-ink bg-ink text-white' : 'border-line bg-white'}`}>{s.display_label}</Link>)}</div></>}
+          <div className="flex flex-wrap gap-2">{isAdmin ? sections.map((s) => <Link key={s.id} href={q({ cs: s.id })} className={`rounded-md border px-3 py-2 text-sm ${s.id === csId ? 'border-ink bg-ink text-white' : 'border-line bg-white'}`}>{s.label}</Link>) : displayGroups.map((g) => <Link key={`${g.class_id}-${g.label}`} href={q({ cs: g.sections[0]?.id })} className={`rounded-md border px-3 py-2 text-sm ${selectedGroup === g ? 'border-ink bg-ink text-white' : 'border-line bg-white'}`}>{g.label}</Link>)}</div>}
+        {csId && <><h2 className="h3 mt-4">2. Subject</h2><div className="flex flex-wrap gap-2">{subOptions.map((s) => <Link key={`${s.cs}-${s.id}`} href={q({ cs: s.cs, sub: s.id })} className={`rounded-md border px-3 py-2 text-sm ${s.id === sub?.id && s.cs === csId ? 'border-ink bg-ink text-white' : 'border-line bg-white'}`}>{s.display_label}</Link>)}</div></>}
       </div>
     </>
   );
