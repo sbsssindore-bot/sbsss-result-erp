@@ -9,7 +9,7 @@ const S = z.object({
   scholar_number: z.string().trim().min(1, 'Scholar number is required.').max(40),
   name: z.string().trim().min(1, 'Student name is required.').max(120),
   class_section_id: z.string().uuid('Choose a class section.'),
-  roll_number: z.coerce.number().int().min(1, 'Enter a roll number.').max(999),
+  roll_number: z.coerce.number().int().min(1, 'Enter a roll number.').max(9999, 'Roll number must be 9999 or less.'),
 });
 const t = (fd: FormData, k: string) => { const v = String(fd.get(k) ?? '').trim(); return v === '' ? null : v; };
 
