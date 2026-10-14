@@ -24,9 +24,16 @@ export async function GET(request: NextRequest) {
     if (!sections.length) return NextResponse.json({ error: 'No active sections found for this class.' }, { status: 404 });
 
     const sectionIds = sections.map((s: any) => s.id);
-    const enrollments = await fetchAll((a, b) => sb.from('student_class_enrollments')
+    const allEnrollments = await fetchAll((a, b) => sb.from('student_class_enrollments')
       .select('id,roll_number,student_id,class_section_id').in('class_section_id', sectionIds)
       .eq('status', 'ACTIVE').order('roll_number').range(a, b));
+    const selectedEnrollmentIds = request.nextUrl.searchParams.getAll('ids').filter(Boolean);
+    const enrollments = selectedEnrollmentIds.length
+      ? allEnrollments.filter((e: any) => selectedEnrollmentIds.includes(e.id))
+      : allEnrollments;
+    if (selectedEnrollmentIds.length && !enrollments.length) {
+      return NextResponse.json({ error: 'Select at least one student, or download the whole class without selecting students.' }, { status: 400 });
+    }
     const studentIds = [...new Set(enrollments.map((e: any) => e.student_id))];
     const students = studentIds.length
       ? await fetchAll((a, b) => sb.from('students').select('id,name,scholar_number').in('id', studentIds).range(a, b))
