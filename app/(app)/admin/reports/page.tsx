@@ -38,7 +38,9 @@ export default async function Reports({ searchParams }: { searchParams: { exam?:
         <form method="get" action="/admin/reports/preview" className="card">
           <input type="hidden" name="exam" value={exam.id} /><input type="hidden" name="class_id" value={selected.id} />
           <div className="mb-3 flex flex-wrap items-center gap-2"><h2 className="h3 !mb-0 flex-1">Class {selected.label} · {exam.name} ({list.length} students)</h2>
+            <a className="btn btn-sec" href={`/admin/reports/export?exam=${encodeURIComponent(exam.id)}&class_id=${selected.id}`}>Download Excel Backup</a>
             <button className="btn btn-sec" type="submit">Preview selected</button><Link className="btn" href={pv(`class_id=${selected.id}`)}>Generate whole class</Link></div>
+          <p className="muted mb-3">Download a class-wise Excel backup of entered marks for emergency record-keeping.</p>
           <div className="tw"><table className="t"><thead><tr><th></th><th>Roll</th><th>Scholar no.</th><th>Name</th><th>Stream / Section</th><th></th></tr></thead><tbody>
             {list.map((e) => <tr key={e.id}><td><input type="checkbox" name="ids" value={e.id} className="h-5 w-5" aria-label={`Select ${e.s?.name}`} /></td><td>{e.roll_number}</td><td>{e.s?.scholar_number}</td><td>{e.s?.name}</td><td>{e.section?.label || ''}</td><td><Link className="btn btn-sm btn-ghost" href={pv(`class_id=${selected.id}&ids=${e.id}`)}>Preview</Link></td></tr>)}
             {list.length === 0 && <tr><td colSpan={6} className="muted">No students in this class.</td></tr>}</tbody></table></div>
