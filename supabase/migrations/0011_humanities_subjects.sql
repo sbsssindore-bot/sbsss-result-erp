@@ -33,9 +33,11 @@ where sess.status = 'ACTIVE'
       and existing.stream_id is null
   );
 
--- Ensure the new subjects have the standard theory/practical limits for template F.
+-- These are theory subjects: all 100 marks belong to the theory component.
 insert into public.exam_component_limits (class_subject_id, component_id, max_marks, is_applicable)
-select cs.id, ec.id, case ec.code when 'PRAC' then 30 else 70 end, true
+select cs.id, ec.id,
+       case ec.code when 'PRAC' then 0 else 100 end,
+       ec.code <> 'PRAC'
 from public.class_subjects cs
 join public.subjects s on s.id = cs.subject_id and s.name in ('Political Science', 'History')
 join public.exam_components ec on ec.template_code = 'F' and ec.code in ('PRAC', 'FT')
