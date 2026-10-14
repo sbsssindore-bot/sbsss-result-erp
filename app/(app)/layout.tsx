@@ -4,7 +4,7 @@ import { requireCtx } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 const ADMIN = [
   ['/admin', 'Dashboard'], ['/admin/students', 'Students'], ['/admin/import/students', '↳ Import Students'], ['/admin/teachers', 'Teachers'], ['/admin/import/teachers', '↳ Import Teachers'],
-  ['/admin/classes', 'Classes & Sections'], ['/admin/assignments', 'Teacher Assignments'], ['/admin/import/assignments', '↳ Bulk Import Assignments'],
+  ['/admin/classes', 'Classes & Sections'], ['/admin/assignments', 'Teacher Assignments'],
   ['/admin/exams', 'Examinations'], ['/marks', 'Marks Entry'], ['/class-entry', 'Attendance & Grades'],
   ['/admin/review', 'Review & Lock'], ['/admin/reports', 'Report Cards'], ['/admin/sessions', 'Academic Sessions'],
   ['/admin/settings', 'Settings'], ['/admin/audit', 'Audit Log'],
