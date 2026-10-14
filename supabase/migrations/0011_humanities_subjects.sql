@@ -1,0 +1,47 @@
+-- Add Humanities/Arts subject options for the existing XI-XII report-card slots.
+-- Idempotent for the current session and safe for existing student choices/marks.
+update public.subject_groups
+set label = case slot_no
+  when 2 then 'Mathematics/Biology/Accountancy/Political Science'
+  when 3 then 'Chemistry/Economics/History'
+  else label
+end
+where template_code = 'F' and slot_no in (2, 3);
+
+insert into public.subjects (name, code)
+values ('Political Science', '028'), ('History', '027')
+on conflict (lower(name), (coalesce(code, ''))) do nothing;
+
+insert into public.class_subjects
+  (session_id, class_id, subject_id, stream_id, subject_group_id, display_label, display_order)
+select sess.id, cls.class_id, subj.id, null, grp.id, subj.name, ord.display_order
+from public.academic_sessions sess
+cross join (values (11::smallint), (12::smallint)) as cls(class_id)
+join public.subjects subj on
+  (subj.name = 'Political Science' and subj.code = '028')
+  or (subj.name = 'History' and subj.code = '027')
+join public.subject_groups grp on grp.template_code = 'F'
+  and grp.slot_no = case when subj.name = 'Political Science' then 2 else 3 end
+join (values ('Political Science', 12), ('History', 13)) as ord(name, display_order)
+  on ord.name = subj.name
+where sess.status = 'ACTIVE'
+  and not exists (
+    select 1 from public.class_subjects existing
+    where existing.session_id = sess.id
+      and existing.class_id = cls.class_id
+      and existing.subject_id = subj.id
+      and existing.stream_id is null
+  );
+
+-- Ensure the new subjects have the standard theory/practical limits for template F.
+insert into public.exam_component_limits (class_subject_id, component_id, max_marks, is_applicable)
+select cs.id, ec.id, case ec.code when 'PRAC' then 30 else 70 end, true
+from public.class_subjects cs
+join public.subjects s on s.id = cs.subject_id and s.name in ('Political Science', 'History')
+join public.exam_components ec on ec.template_code = 'F' and ec.code in ('PRAC', 'FT')
+join public.examinations ex on ex.id = ec.examination_id and ex.session_id = cs.session_id
+where cs.class_id in (11, 12)
+  and not exists (
+    select 1 from public.exam_component_limits l
+    where l.class_subject_id = cs.id and l.component_id = ec.id
+  );
