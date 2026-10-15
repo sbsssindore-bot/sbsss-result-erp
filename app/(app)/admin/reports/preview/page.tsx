@@ -41,7 +41,7 @@ export default async function Preview({ searchParams }: { searchParams: { exam?:
       <div className="no-print mb-4 flex flex-wrap items-center gap-2">
         <Link href={`/admin/reports?exam=${exam.id}${backQuery}`} className="btn btn-ghost">← Back</Link>
         <span className="flex-1 text-sm"><b>{cards.length}</b> report card(s){className ? ` · Class ${className}` : ''} · {exam.name}{incomplete ? ` · ${incomplete} with incomplete marks` : ''}</span>
-        <PrintButton label="Print" /><a className="btn" href={`/api/report-pdf?${qs}`}>Download PDF</a>
+        <PrintButton label="Print" /><a className="btn btn-sec" href={`/api/report-word?${qs}`}>Download Word</a><a className="btn" href={`/api/report-pdf?${qs}`}>Download PDF</a>
       </div>
       {capped && <div className="no-print mb-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">Showing the first {MAX_CARDS} cards. This class has more students; generate smaller groups for the rest.</div>}
       <style dangerouslySetInnerHTML={{ __html: REPORT_CSS }} />
