@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'node:fs';
 import path from 'node:path';
-import { groupSections, parseIds, pickSubject, planSubjectAssignments, groupLabel } from '../lib/assignGroups';
+import { groupSections, parseIds, parseSubjectPairs, pickSubject, planSubjectAssignments, planExactSubjectAssignments, groupLabel } from '../lib/assignGroups';
 
 const M = path.join(__dirname, '../supabase/migrations');
 const SID: Record<string, number> = { Commerce: 801, PCB: 802, PCM: 803, Humanities: 804, Science: 805 };
@@ -81,4 +81,32 @@ test('database: teacher assigned "XI-A" sees/enters marks only for the stream sh
   assert.equal(await can(csSci, accountancy), false);
   assert.equal((await q('select id from teacher_assignments')).length, 1, 'teacher sees only own assignment rows');
   await as(); await db.close();
+});
+
+
+test('explicit class-subject pairs never create a Cartesian product', () => {
+  const sections = [sec(1, 2, 'II-A', undefined, 'A', 'II'), sec(2, 3, 'III-A', undefined, 'A', 'III')];
+  const subs = [sub(10, 2, 'EVS'), sub(11, 2, 'Mathematics'), sub(12, 3, 'EVS'), sub(13, 3, 'Mathematics')];
+  const pairs = parseSubjectPairs([`${U(1)}:${U(10)};${U(2)}:${U(12)}`]);
+  const planned = planExactSubjectAssignments({
+    sections,
+    subs,
+    existing: [],
+    pairs,
+    teacher: U(500),
+    mode: 'add',
+    session: U(700),
+  });
+  assert.deepEqual(
+    planned.add.map((row) => [row.class_section_id, row.class_subject_id]),
+    [[U(1), U(10)], [U(2), U(12)]],
+  );
+  assert.equal(planned.add.some((row) => row.class_subject_id === U(11) || row.class_subject_id === U(13)), false);
+});
+
+test('explicit pair parser ignores malformed values and de-duplicates exact pairs', () => {
+  assert.deepEqual(
+    parseSubjectPairs([`${U(1)}:${U(10)};${U(1)}:${U(10)};bad;1:2`]),
+    [{ class_section_id: U(1), class_subject_id: U(10) }],
+  );
 });
