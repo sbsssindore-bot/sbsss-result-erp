@@ -53,7 +53,7 @@ export default async function Assignments({
   const subs = await fetchAll((a, b) =>
     sb
       .from("class_subjects")
-      .select("class_id,subjects(name)")
+      .select("class_id,stream_id,display_label,subjects(name)")
       .eq("session_id", session.id)
       .eq("status", "ACTIVE")
       .eq("kind", "MARKS")
@@ -332,23 +332,43 @@ export default async function Assignments({
         <h2 className="h3">A. Subject teacher</h2>
 
         {Teacher}
-        {ClassChoices}
 
         <div className="mb-3">
-          <div className="muted mb-2">
-            Select subjects for the selected classes. For different subjects in different classes (for example IX Maths and X English), save each class-subject combination separately.
+          <div className="muted mb-3">
+            Har class ke saamne sirf wahi subject select karein jo teacher us class mein padhata/padhati hai. Subjects ab sabhi selected classes par automatically apply nahi honge.
           </div>
-          <div>
-            {subjectNames.map((name) => (
-              <label key={name} className="pick">
-                <input
-                  type="checkbox"
-                  name="subj"
-                  value={name}
-                />
-                {" "}{name}
-              </label>
-            ))}
+          <div className="space-y-4">
+            {groups.map((group) => {
+              const options = [...new Map(
+                (subs as any[])
+                  .filter((s) => Number(s.class_id) === group.class_id)
+                  .map((s) => {
+                    const value = String(s.subjects?.name || s.display_label || "").trim();
+                    const label = String(s.display_label || s.subjects?.name || "").trim();
+                    return [value.toLowerCase(), { value, label }];
+                  })
+                  .filter(([key, item]: any) => key && item.value && item.label)
+              ).values()] as { value: string; label: string }[];
+              return (
+                <div key={group.key} className="rounded-lg border border-line p-3">
+                  <h3 className="font-semibold mb-2">{group.label}</h3>
+                  {options.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {options.map((subject) => (
+                        <label key={subject.value} className="pick">
+                          <input
+                            type="checkbox"
+                            name="pair"
+                            value={JSON.stringify({ classId: group.class_id, ids: group.ids, subject: subject.value })}
+                          />
+                          {" "}{subject.label}
+                        </label>
+                      ))}
+                    </div>
+                  ) : <p className="muted text-sm">No active marks subjects configured for this class.</p>}
+                </div>
+              );
+            })}
           </div>
         </div>
 
