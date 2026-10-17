@@ -6,6 +6,7 @@ import Flash from "@/components/Flash";
 import {
   groupLabel,
   groupSections,
+  pickSubject,
 } from "@/lib/assignGroups";
 import {
   assignSubjectTeacher,
@@ -53,21 +54,12 @@ export default async function Assignments({
   const subs = await fetchAll((a, b) =>
     sb
       .from("class_subjects")
-      .select("class_id,subjects(name)")
+      .select("id,class_id,stream_id,display_label,kind,subjects(name)")
       .eq("session_id", session.id)
       .eq("status", "ACTIVE")
       .eq("kind", "MARKS")
       .range(a, b)
   );
-
-  const subjectNames = [
-    ...new Set(
-      subs
-        .map((s: any) => s.subjects?.name)
-        .filter(Boolean)
-        .map((name: string) => name.trim())
-    ),
-  ].sort((a, b) => a.localeCompare(b));
 
   const gradeAreas = await fetchAll((a, b) =>
     sb.from("co_scholastic_areas")
@@ -141,6 +133,32 @@ export default async function Assignments({
       a.class_id - b.class_id ||
       a.label.localeCompare(b.label)
   );
+
+  // Build exact subject options for each class group. The submitted value
+  // contains only the real section/subject pairs represented by that option.
+  const subjectOptionsByGroup = groups.map((group) => {
+    const choices = new Map<string, { label: string; pairs: string[]; streams: Set<string> }>();
+    for (const sectionId of group.ids) {
+      const section = (sections as any[]).find((row) => row.id === sectionId);
+      if (!section) continue;
+      for (const subject of subs as any[]) {
+        const label = String(subject.display_label || subject.subjects?.name || "").trim();
+        if (!label) continue;
+        const applicable = pickSubject(subs as any, section, label.toLowerCase());
+        if (applicable?.id !== subject.id) continue;
+        const key = label.toLowerCase();
+        const choice = choices.get(key) || { label, pairs: [], streams: new Set<string>() };
+        const pair = `${section.id}:${subject.id}`;
+        if (!choice.pairs.includes(pair)) choice.pairs.push(pair);
+        if (section.stream_id && section.streams?.name) choice.streams.add(section.streams.name);
+        choices.set(key, choice);
+      }
+    }
+    return {
+      ...group,
+      choices: [...choices.values()].sort((a, b) => a.label.localeCompare(b.label)),
+    };
+  });
 
   type Row = {
     ids: string[];
@@ -291,6 +309,33 @@ export default async function Assignments({
     </div>
   );
 
+  const SubjectClassChoices = (
+    <div className="mb-3">
+      <div className="muted mb-2">
+        Select subjects separately under each class. Only the checked class-subject combinations will be assigned.
+        XI–XII subjects are limited to the streams that offer them.
+      </div>
+      <div className="space-y-3">
+        {subjectOptionsByGroup.map((group) => (
+          <div key={group.key} className="rounded-md border border-line p-3">
+            <div className="mb-2 font-semibold">{group.label}</div>
+            {group.choices.length ? (
+              <div>
+                {group.choices.map((choice) => (
+                  <label key={choice.label.toLowerCase()} className="pick">
+                    <input type="checkbox" name="pairs" value={choice.pairs.join(";")} />
+                    {" "}{choice.label}
+                    {choice.streams.size > 0 ? ` (${[...choice.streams].sort().join(", ")})` : ""}
+                  </label>
+                ))}
+              </div>
+            ) : <p className="muted text-sm">No active marks subjects configured for this class.</p>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -332,25 +377,7 @@ export default async function Assignments({
         <h2 className="h3">A. Subject teacher</h2>
 
         {Teacher}
-        {ClassChoices}
-
-        <div className="mb-3">
-          <div className="muted mb-2">
-            Select subjects for the selected classes. For different subjects in different classes (for example IX Maths and X English), save each class-subject combination separately.
-          </div>
-          <div>
-            {subjectNames.map((name) => (
-              <label key={name} className="pick">
-                <input
-                  type="checkbox"
-                  name="subj"
-                  value={name}
-                />
-                {" "}{name}
-              </label>
-            ))}
-          </div>
-        </div>
+        {SubjectClassChoices}
 
         <label className="lbl max-w-sm">
           If another teacher already teaches the same subject
