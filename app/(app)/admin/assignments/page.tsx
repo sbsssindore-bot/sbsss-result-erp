@@ -381,10 +381,10 @@ export default async function Assignments({
 
         <label className="lbl max-w-sm">
           If another teacher already teaches the same subject
-          <select className="input" name="mode" defaultValue="add">
-            <option value="add">Add as additional teacher</option>
+          <select className="input" name="mode" defaultValue="replace">
+            <option value="replace">Replace this teacher’s assignments in selected classes (recommended)</option>
+            <option value="add">Add as additional teacher (keeps existing assignments)</option>
             <option value="skip">Skip (keep existing teacher)</option>
-            <option value="replace">Replace existing teacher</option>
           </select>
         </label>
 
