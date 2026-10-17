@@ -7,7 +7,7 @@ import { requireAdmin, sessionAndExams } from "@/lib/auth";
 import { friendlyError, fetchAll } from "@/lib/db";
 import {
   parseIds,
-  planSubjectAssignments,
+  pickSubject,
 } from "@/lib/assignGroups";
 
 const done = (
@@ -25,121 +25,87 @@ export async function assignSubjectTeacher(fd: FormData) {
 
   const teacher = String(fd.get("teacher") || "");
   const mode = String(fd.get("mode") || "add");
-  const selectedIds = parseIds(fd.getAll("cs"));
-  const names = [
-    ...new Set(
-      fd
-        .getAll("subj")
-        .map((value) => String(value).trim().toLowerCase())
-        .filter(Boolean)
-    ),
-  ];
+  const pairs = [...new Map(
+    fd.getAll("pair").flatMap((value) => {
+      try {
+        const p = JSON.parse(String(value));
+        if (!Number.isInteger(Number(p.classId)) || !Array.isArray(p.ids) || !p.subject) return [];
+        const ids = parseIds(p.ids);
+        const subject = String(p.subject).trim();
+        if (!ids.length || !subject) return [];
+        const key = `${Number(p.classId)}|${ids.sort().join(",")}|${subject.toLowerCase()}`;
+        return [[key, { classId: Number(p.classId), ids, subject }]];
+      } catch {
+        return [];
+      }
+    })
+  ).values()];
 
-  if (!teacher || !session) {
-    return done(teacher, "Choose a teacher.", true);
-  }
-
-  if (!selectedIds.length || !names.length) {
-    return done(
-      teacher,
-      "Select at least one class and one subject.",
-      true
-    );
-  }
-
-  if (!["skip", "add", "replace"].includes(mode)) {
-    return done(teacher, "Invalid assignment mode.", true);
-  }
+  if (!teacher || !session) return done(teacher, "Choose a teacher.", true);
+  if (!pairs.length) return done(teacher, "Select the subject separately for each class.", true);
+  if (!["skip", "add", "replace"].includes(mode)) return done(teacher, "Invalid assignment mode.", true);
 
   try {
-    // The class checkbox can represent one section or
-    // multiple underlying XI-XII stream sections.
+    const selectedIds = [...new Set(pairs.flatMap((p) => p.ids))];
     const sections = await fetchAll((a, b) =>
-      sb
-        .from("class_sections")
-        .select(
-          "id,class_id,label,section_id,stream_id,streams(name),sections(name),classes(roman)"
-        )
-        .eq("session_id", session.id)
-        .eq("status", "ACTIVE")
-        .in("id", selectedIds)
-        .range(a, b)
+      sb.from("class_sections")
+        .select("id,class_id,label,section_id,stream_id,streams(name),sections(name),classes(roman)")
+        .eq("session_id", session.id).eq("status", "ACTIVE").in("id", selectedIds).range(a, b)
     );
+    const validSections = sections as any[];
+    if (!validSections.length) return done(teacher, "No active class sections found.", true);
 
-    if (!sections.length) {
-      return done(
-        teacher,
-        "No active class sections found.",
-        true
-      );
-    }
-
-    const validIds = (sections as any[]).map(
-      (section) => section.id
-    );
-
-    // Subjects come from the real active class_subjects
-    // records. No stream dropdown or hardcoded stream choice.
     const subs = await fetchAll((a, b) =>
-      sb
-        .from("class_subjects")
-        .select(
-          "id,class_id,stream_id,display_label,kind,subjects(name)"
-        )
-        .eq("session_id", session.id)
-        .eq("status", "ACTIVE")
-        .eq("kind", "MARKS")
-        .range(a, b)
+      sb.from("class_subjects")
+        .select("id,class_id,stream_id,display_label,kind,subjects(name)")
+        .eq("session_id", session.id).eq("status", "ACTIVE").eq("kind", "MARKS").range(a, b)
     );
-
     const existing = await fetchAll((a, b) =>
-      sb
-        .from("teacher_assignments")
-        .select(
-          "id,teacher_id,class_section_id,class_subject_id"
-        )
-        .eq("session_id", session.id)
-        .eq("role", "SUBJECT")
-        .in("class_section_id", validIds)
-        .range(a, b)
+      sb.from("teacher_assignments")
+        .select("id,teacher_id,class_section_id,class_subject_id")
+        .eq("session_id", session.id).eq("role", "SUBJECT")
+        .in("class_section_id", validSections.map((s: any) => s.id)).range(a, b)
     );
 
-    const {
-      add,
-      removeIds,
-      skippedMissing,
-      dup,
-      conflicts,
-    } = planSubjectAssignments({
-      sections: sections as any,
-      subs: subs as any,
-      existing: existing as any,
-      names,
-      teacher,
-      mode,
-      session: session.id,
-    });
+    const add: any[] = [];
+    const removeIds: string[] = [];
+    let skippedMissing = 0, dup = 0, conflicts = 0;
+
+    for (const pair of pairs) {
+      for (const sectionId of pair.ids) {
+        const section = validSections.find((s: any) => s.id === sectionId && Number(s.class_id) === pair.classId);
+        if (!section) { skippedMissing++; continue; }
+
+        const subject = pickSubject(subs as any, section, pair.subject.toLowerCase());
+        if (!subject) { skippedMissing++; continue; }
+
+        const current = (existing as any[]).filter((row) =>
+          row.class_section_id === section.id && row.class_subject_id === subject.id
+        );
+        if (current.some((row) => row.teacher_id === teacher)) { dup++; continue; }
+        if (current.length) {
+          conflicts++;
+          if (mode === "skip") continue;
+          if (mode === "replace") current.forEach((row) => removeIds.push(row.id));
+        }
+        add.push({
+          session_id: session.id,
+          teacher_id: teacher,
+          class_section_id: section.id,
+          class_subject_id: subject.id,
+          role: "SUBJECT",
+        });
+      }
+    }
 
     if (removeIds.length) {
-      const { error } = await sb
-        .from("teacher_assignments")
-        .delete()
-        .eq("session_id", session.id)
-        .in("id", removeIds);
-
-      if (error) {
-        return done(teacher, friendlyError(error), true);
-      }
+      const { error } = await sb.from("teacher_assignments").delete()
+        .eq("session_id", session.id).in("id", [...new Set(removeIds)]);
+      if (error) return done(teacher, friendlyError(error), true);
     }
-
     if (add.length) {
-      const { error } = await sb
-        .from("teacher_assignments")
-        .insert(add);
-
-      if (error) {
-        return done(teacher, friendlyError(error), true);
-      }
+      const { error } = await sb.from("teacher_assignments").insert(add);
+      if (error) return done(teacher, friendlyError(error), true);
     }
 
     revalidatePath("/admin/assignments");
@@ -147,34 +113,13 @@ export async function assignSubjectTeacher(fd: FormData) {
     revalidatePath("/marks");
     revalidatePath("/teacher");
 
-    const messages = [`${add.length} assignment(s) added`];
-
-    if (dup) {
-      messages.push(`${dup} already existed`);
-    }
-
-    if (skippedMissing) {
-      messages.push(
-        `${skippedMissing} skipped because the subject is not configured for that class/stream`
-      );
-    }
-
-    if (conflicts && mode === "skip") {
-      messages.push(
-        `${conflicts} skipped because another teacher is assigned`
-      );
-    }
-
-    return done(
-      teacher,
-      messages.join("; ") + ".",
-      add.length === 0 && dup === 0
-    );
+    const messages = [`${add.length} class-subject assignment(s) added`];
+    if (dup) messages.push(`${dup} already existed`);
+    if (skippedMissing) messages.push(`${skippedMissing} skipped because that subject is not configured for the selected class/stream`);
+    if (conflicts && mode === "skip") messages.push(`${conflicts} skipped because another teacher is assigned`);
+    return done(teacher, messages.join("; ") + ".", add.length === 0 && dup === 0);
   } catch (error: any) {
-    if (error?.digest?.startsWith?.("NEXT_REDIRECT")) {
-      throw error;
-    }
-
+    if (error?.digest?.startsWith?.("NEXT_REDIRECT")) throw error;
     return done(teacher, friendlyError(error), true);
   }
 }
