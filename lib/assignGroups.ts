@@ -189,4 +189,90 @@ export function planSubjectAssignments(p: {
   };
 }
 
+export type SubjectPair = {
+  class_section_id: string;
+  class_subject_id: string;
+};
+
+export function parseSubjectPairs(values: unknown[]): SubjectPair[] {
+  const result = new Map<string, SubjectPair>();
+  const uuid = /^[0-9a-f-]{36}$/i;
+  for (const value of values) {
+    for (const item of String(value || "").split(";")) {
+      const [sectionId, subjectId, extra] = item.split(":");
+      if (extra !== undefined || !uuid.test(sectionId || "") || !uuid.test(subjectId || "")) continue;
+      result.set(`${sectionId}:${subjectId}`, {
+        class_section_id: sectionId,
+        class_subject_id: subjectId,
+      });
+    }
+  }
+  return [...result.values()];
+}
+
+/**
+ * Plan only the explicitly selected class-section/subject pairs.
+ * Unlike planSubjectAssignments, this never forms a class × subject
+ * Cartesian product.
+ */
+export function planExactSubjectAssignments(p: {
+  sections: Sec[];
+  subs: Sub[];
+  existing: Existing[];
+  pairs: SubjectPair[];
+  teacher: string;
+  mode: string;
+  session: string;
+}) {
+  const add: any[] = [];
+  const removeIds: string[] = [];
+  let skippedMissing = 0;
+  let dup = 0;
+  let conflicts = 0;
+
+  for (const pair of p.pairs) {
+    const section = p.sections.find((row) => row.id === pair.class_section_id);
+    const subject = p.subs.find((row) => row.id === pair.class_subject_id);
+    if (!section || !subject || subject.class_id !== section.class_id) {
+      skippedMissing++;
+      continue;
+    }
+
+    const subjectName = String(subject.display_label || subject.subjects?.name || "").trim().toLowerCase();
+    const applicable = pickSubject(p.subs, section, subjectName);
+    if (!subjectName || applicable?.id !== subject.id) {
+      skippedMissing++;
+      continue;
+    }
+
+    const existing = p.existing.filter(
+      (row) => row.class_section_id === section.id && row.class_subject_id === subject.id
+    );
+    if (existing.some((row) => row.teacher_id === p.teacher)) {
+      dup++;
+      continue;
+    }
+    if (existing.length) {
+      conflicts++;
+      if (p.mode === "skip") continue;
+      if (p.mode === "replace") existing.forEach((row) => removeIds.push(row.id));
+    }
+
+    add.push({
+      session_id: p.session,
+      teacher_id: p.teacher,
+      class_section_id: section.id,
+      class_subject_id: subject.id,
+      role: "SUBJECT",
+    });
+  }
+
+  return {
+    add,
+    removeIds: [...new Set(removeIds)],
+    skippedMissing,
+    dup,
+    conflicts,
+  };
+}
 

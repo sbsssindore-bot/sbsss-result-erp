@@ -7,7 +7,8 @@ import { requireAdmin, sessionAndExams } from "@/lib/auth";
 import { friendlyError, fetchAll } from "@/lib/db";
 import {
   parseIds,
-  planSubjectAssignments,
+  parseSubjectPairs,
+  planExactSubjectAssignments,
 } from "@/lib/assignGroups";
 
 const done = (
@@ -25,26 +26,15 @@ export async function assignSubjectTeacher(fd: FormData) {
 
   const teacher = String(fd.get("teacher") || "");
   const mode = String(fd.get("mode") || "add");
-  const selectedIds = parseIds(fd.getAll("cs"));
-  const names = [
-    ...new Set(
-      fd
-        .getAll("subj")
-        .map((value) => String(value).trim().toLowerCase())
-        .filter(Boolean)
-    ),
-  ];
+  const selectedPairs = parseSubjectPairs(fd.getAll("pairs"));
+  const selectedIds = [...new Set(selectedPairs.map((pair) => pair.class_section_id))];
 
   if (!teacher || !session) {
     return done(teacher, "Choose a teacher.", true);
   }
 
-  if (!selectedIds.length || !names.length) {
-    return done(
-      teacher,
-      "Select at least one class and one subject.",
-      true
-    );
+  if (!selectedPairs.length) {
+    return done(teacher, "Select at least one subject under a specific class.", true);
   }
 
   if (!["skip", "add", "replace"].includes(mode)) {
@@ -110,11 +100,11 @@ export async function assignSubjectTeacher(fd: FormData) {
       skippedMissing,
       dup,
       conflicts,
-    } = planSubjectAssignments({
+    } = planExactSubjectAssignments({
       sections: sections as any,
       subs: subs as any,
       existing: existing as any,
-      names,
+      pairs: selectedPairs,
       teacher,
       mode,
       session: session.id,
