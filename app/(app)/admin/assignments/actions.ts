@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin, sessionAndExams } from "@/lib/auth";
 import { friendlyError, fetchAll } from "@/lib/db";
 import {
+  parseIds,
   parseSubjectPairs,
   planExactSubjectAssignments,
 } from "@/lib/assignGroups";
