@@ -7,7 +7,7 @@ create temporary table _desired_teacher_subjects (
   employee_id text not null,
   class_roman text not null,
   subject_key text not null
-) on commit drop;
+);
 
 insert into _desired_teacher_subjects (employee_id, class_roman, subject_key) values
   ('T025', 'VI',   'social_science'),
