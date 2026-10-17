@@ -110,6 +110,23 @@ export async function assignSubjectTeacher(fd: FormData) {
       session: session.id,
     });
 
+    // In Replace mode, also remove this teacher's obsolete subject rows
+    // inside the selected classes. Otherwise old subjects remain visible
+    // on the teacher dashboard after the class-specific selection changes.
+    if (mode === "replace") {
+      const selectedPairKeys = new Set(
+        selectedPairs.map((pair) => `${pair.class_section_id}:${pair.class_subject_id}`)
+      );
+      for (const row of existing as any[]) {
+        if (
+          row.teacher_id === teacher &&
+          !selectedPairKeys.has(`${row.class_section_id}:${row.class_subject_id}`)
+        ) {
+          removeIds.push(row.id);
+        }
+      }
+    }
+
     if (removeIds.length) {
       const { error } = await sb
         .from("teacher_assignments")
