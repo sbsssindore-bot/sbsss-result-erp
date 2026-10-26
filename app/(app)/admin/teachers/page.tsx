@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { requireAdmin, sessionAndExams } from '@/lib/auth';
 import { fetchAll } from '@/lib/db';
 import Flash from '@/components/Flash';
-import { saveTeacher, toggleTeacher } from './actions';
+import { saveTeacher, toggleTeacher, resetTeacherPassword } from './actions';
 
 export default async function Teachers({
   searchParams,
@@ -11,6 +11,7 @@ export default async function Teachers({
   searchParams: {
     add?: string;
     edit?: string;
+    reset?: string;
     msg?: string;
     err?: string;
   };
@@ -40,6 +41,7 @@ export default async function Teachers({
     : null;
 
   const showForm = searchParams.add || editing;
+  const resetting = searchParams.reset ? teachers.find((t: any) => t.id === searchParams.reset) : null;
 
   return (
     <>
@@ -66,6 +68,29 @@ export default async function Teachers({
       </p>
 
       <Flash msg={searchParams.msg} err={searchParams.err} />
+
+      {resetting && (
+        <form action={resetTeacherPassword} className="card mb-4 max-w-xl">
+          <h2 className="h3">Reset password: {resetting.name}</h2>
+          <p className="muted mb-3 text-sm">
+            Set a new password for this teacher. No email is sent. The teacher can
+            sign in with their registered email and the new password.
+          </p>
+          <input type="hidden" name="id" value={resetting.id} />
+          <label className="lbl">
+            New password *
+            <input className="input" type="password" name="password" minLength={8} autoComplete="new-password" required />
+          </label>
+          <label className="lbl">
+            Confirm new password *
+            <input className="input" type="password" name="confirm_password" minLength={8} autoComplete="new-password" required />
+          </label>
+          <div className="flex gap-2">
+            <button className="btn">Save new password</button>
+            <Link className="btn btn-ghost" href="/admin/teachers">Cancel</Link>
+          </div>
+        </form>
+      )}
 
       {showForm && (
         <form action={saveTeacher} className="card max-w-3xl">
@@ -219,6 +244,15 @@ export default async function Teachers({
                   >
                     Assign
                   </Link>
+
+                  {t.profile_id && (
+                    <Link
+                      className="btn btn-sm btn-ghost"
+                      href={`/admin/teachers?reset=${t.id}`}
+                    >
+                      Reset password
+                    </Link>
+                  )}
 
                   <form action={toggleTeacher}>
                     <input type="hidden" name="id" value={t.id} />
