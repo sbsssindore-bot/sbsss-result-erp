@@ -1,26 +1,24 @@
 'use client';
-import { useState } from 'react';
 import Link from 'next/link';
-import { supabaseBrowser } from '@/lib/supabase/browser';
 
 export default function ForgotPassword() {
-  const [email, setEmail] = useState('');
-  const [done, setDone] = useState(false);
-  const [busy, setBusy] = useState(false);
-  async function submit(e: React.FormEvent) {
-    e.preventDefault(); setBusy(true);
-    await supabaseBrowser().auth.resetPasswordForEmail(email.trim(), { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent('/set-password')}` });
-    setDone(true); setBusy(false);
-  }
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-xl border border-line bg-white p-6">
-        <h1 className="h2">Reset password</h1>
-        {done ? <p className="text-sm">If this email is registered, a reset link has been sent. Check your inbox.</p> : <>
-          <label className="lbl">Email<input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-          <button className="btn w-full" disabled={busy}>Send reset link</button></>}
-        <p className="mt-3 text-center text-sm"><Link className="text-maroon underline" href="/login">Back to sign in</Link></p>
-      </form>
+      <div className="w-full max-w-sm rounded-xl border border-line bg-white p-6">
+        <h1 className="h2">Forgot password?</h1>
+        <p className="mb-4 text-sm text-slate-600">
+          Please contact the ERP administrator to reset your password. The administrator
+          can set a new password without sending an email. You can then sign in with
+          your existing registered email ID and the new password.
+        </p>
+        <p className="mb-4 text-sm text-slate-600">
+          New teachers who have not activated their account yet can use Teacher Activation.
+        </p>
+        <Link className="btn w-full text-center" href="/login">Back to sign in</Link>
+        <p className="mt-3 text-center text-sm">
+          New teacher? <Link className="text-maroon underline" href="/teacher-activate">Activate your account</Link>
+        </p>
+      </div>
     </div>
   );
 }
