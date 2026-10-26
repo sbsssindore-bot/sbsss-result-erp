@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireAdmin } from '@/lib/auth';
 import { friendlyError } from '@/lib/db';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const T = z.object({
   employee_id: z.string().trim().min(1, 'Employee ID is required.').max(40),
@@ -61,6 +62,25 @@ export async function saveTeacher(fd: FormData) {
 
   revalidatePath('/admin/teachers');
   return go(id ? 'Teacher updated.' : 'Teacher added successfully.');
+}
+
+/** Admin-only password reset; no email service is required. */
+export async function resetTeacherPassword(fd: FormData) {
+  await requireAdmin();
+  const id = String(fd.get('id') ?? '').trim();
+  const password = String(fd.get('password') ?? '');
+  const confirmPassword = String(fd.get('confirm_password') ?? '');
+  if (!id) return go('Select a teacher account.', true);
+  if (password.length < 8) return redirect(`/admin/teachers?reset=${encodeURIComponent(id)}&err=${encodeURIComponent('Password must be at least 8 characters.')}`);
+  if (password !== confirmPassword) return redirect(`/admin/teachers?reset=${encodeURIComponent(id)}&err=${encodeURIComponent('Passwords do not match.')}`);
+  const admin = supabaseAdmin();
+  const { data: teacher, error: teacherError } = await admin.from('teachers').select('id,name,email,profile_id').eq('id', id).maybeSingle();
+  if (teacherError || !teacher) return go('Teacher record was not found.', true);
+  if (!teacher.profile_id || !teacher.email) return go('This teacher has not activated their account yet. Ask them to use Teacher Activation first.', true);
+  const { error } = await admin.auth.admin.updateUserById(teacher.profile_id, { password });
+  if (error) return redirect(`/admin/teachers?reset=${encodeURIComponent(id)}&err=${encodeURIComponent(error.message)}`);
+  revalidatePath('/admin/teachers');
+  return go(`Password reset successfully for ${teacher.name}. They can now sign in with their registered email and the new password.`);
 }
 
 export async function toggleTeacher(fd: FormData) {
