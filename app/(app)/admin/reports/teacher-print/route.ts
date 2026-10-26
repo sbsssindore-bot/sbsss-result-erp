@@ -88,25 +88,30 @@ export async function GET(request: NextRequest) {
         'Scholar No.': student?.scholar_number ?? '',
         'Student Name': student?.name ?? '',
       };
+      let totalMarks = 0;
       for (const subject of applicable) {
         const marksForSubject = subject.components.map((component: any) => {
           const mark = markRows.find((m: any) => m.enrollment_id === enrollment.id
             && m.class_subject_id === subject.id && m.component_id === component.id);
           if (!mark) return '';
-          return mark.is_absent ? 'AB' : (mark.value ?? '');
+          if (mark.is_absent) return 'AB';
+          const value = mark.value ?? '';
+          if (value !== '' && Number.isFinite(Number(value))) totalMarks += Number(value);
+          return value;
         });
         row[subject.display_label] = marksForSubject.length === 1
           ? marksForSubject[0]
           : marksForSubject.filter((x: any) => x !== '').join(' / ');
       }
+      row['Total Marks'] = totalMarks;
       return row;
     });
 
     const workbook = XLSX.utils.book_new();
-    const sheet = XLSX.utils.json_to_sheet(rows, { header: ['Class', 'Section', 'Roll No.', 'Scholar No.', 'Student Name', ...subjectColumns] });
+    const sheet = XLSX.utils.json_to_sheet(rows, { header: ['Class', 'Section', 'Roll No.', 'Scholar No.', 'Student Name', ...subjectColumns, 'Total Marks'] });
     sheet['!cols'] = [
       { wch: 8 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 28 },
-      ...subjectColumns.map(() => ({ wch: 16 })),
+      ...subjectColumns.map(() => ({ wch: 16 })), { wch: 14 },
     ];
     sheet['!autofilter'] = { ref: sheet['!ref'] || 'A1:A1' };
     XLSX.utils.book_append_sheet(workbook, sheet, 'First Term Class Marks');
