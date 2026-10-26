@@ -39,6 +39,7 @@ export default async function Reports({ searchParams }: { searchParams: { exam?:
           <input type="hidden" name="exam" value={exam.id} /><input type="hidden" name="class_id" value={selected.id} />
           <div className="mb-3 flex flex-wrap items-center gap-2"><h2 className="h3 !mb-0 flex-1">Class {selected.label} · {exam.name} ({list.length} students)</h2>
             <a className="btn btn-sec" href={`/admin/reports/export?exam=${encodeURIComponent(exam.id)}&class_id=${selected.id}`}>Download Excel Backup</a>
+            <a className="btn btn-sec" href={`/admin/reports/teacher-print?exam=${encodeURIComponent(exam.id)}&class_id=${selected.id}`}>Download Class Teacher Print Sheet</a>
             <button className="btn btn-sec" type="submit">Preview selected</button><Link className="btn" href={pv(`class_id=${selected.id}`)}>Generate whole class</Link></div>
           <p className="muted mb-3">Download a class-wise Excel backup of entered marks for emergency record-keeping.</p>
           <div className="tw"><table className="t"><thead><tr><th></th><th>Roll</th><th>Scholar no.</th><th>Name</th><th>Stream / Section</th><th></th></tr></thead><tbody>
