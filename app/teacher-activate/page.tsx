@@ -38,6 +38,12 @@ export default function TeacherActivate() {
               {done.already ? '' : '✅ '}{done.message}
             </div>
             {done.loginId && <p className="mb-3 text-sm">Your Login ID: <b>{done.loginId}</b></p>}
+            {done.already && (
+              <div className="mb-3 rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+                Already activated this account but forgot the password? You do not need to activate again or create a new account. Use the same registered email address to reset your password.
+                <Link className="mt-2 block font-medium text-maroon underline" href="/forgot-password">Reset password using registered email</Link>
+              </div>
+            )}
             {done.redirect && <p className="mb-2 text-xs text-slate-500">Taking you to the login page…</p>}
             <Link className="btn w-full text-center" href="/login?activated=1">Go to Teacher Login</Link>
           </div>
