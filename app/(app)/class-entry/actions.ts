@@ -70,7 +70,7 @@ export async function saveClassEntry(raw: unknown): Promise<{ ok: boolean; error
       batch = ins.data;
     }
     if (batch.status === 'LOCKED') return { ok: false, error: 'This class entry is locked. Only the administrator can unlock it.' };
-    if (!isAdmin && ['SUBMITTED', 'VERIFIED'].includes(batch.status)) {
+    if (!isAdmin && !classAssignment?.length && ['SUBMITTED', 'VERIFIED'].includes(batch.status)) {
       return { ok: false, error: 'This entry has been submitted. Ask the administrator to return it for correction.' };
     }
     const base = { batch_id: batch.id, examination_id: i.examId };
@@ -93,7 +93,7 @@ export async function saveClassEntry(raw: unknown): Promise<{ ok: boolean; error
       if (error) return { ok: false, error: friendlyError(error) };
     }
 
-    const rem = isGradeOnlyTeacher ? [] : i.rows.map((r) => ({ ...base, enrollment_id: r.e, remarks: r.remarks || null, ...(isAdmin ? { result_status: r.status || null } : {}) }));
+    const rem = isGradeOnlyTeacher ? [] : i.rows.map((r) => ({ ...base, enrollment_id: r.e, remarks: r.remarks || null, ...((isAdmin || (!isGradeOnlyTeacher && r.status !== null)) ? { result_status: r.status || null } : {}) }));
     if (rem.length) { const { error } = await sb.from('report_remarks').upsert(rem, { onConflict: 'enrollment_id,examination_id' }); if (error) return { ok: false, error: friendlyError(error) }; }
 
     if (i.submit && ['DRAFT', 'NONE'].includes(batch.status)) {
