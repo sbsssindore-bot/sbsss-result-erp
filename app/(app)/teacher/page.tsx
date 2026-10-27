@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireCtx, sessionAndExams } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import ResultStatusAutoRefresh from '@/components/ResultStatusAutoRefresh';
 
 export default async function TeacherDashboard({ searchParams }: { searchParams: { exam?: string } }) {
   const { sb, teacher, isAdmin } = await requireCtx();
@@ -21,7 +22,7 @@ export default async function TeacherDashboard({ searchParams }: { searchParams:
     ? await sb.from('class_sections').select('id,label,class_id').eq('session_id', session.id).eq('status', 'ACTIVE').in('class_id', gradeClassIds).order('class_id').order('label')
     : { data: [] as any[] };
 
-  const { data: batches } = exam ? await sb.from('mark_batches').select('class_section_id,class_subject_id,status').eq('examination_id', exam.id) : { data: [] as any[] };
+  const { data: batches } = exam ? await sb.from('mark_batches').select('class_section_id,class_subject_id,status,class_subjects(display_label)').eq('examination_id', exam.id) : { data: [] as any[] };
   const st = (a: any) => (batches || []).find((b: any) => b.class_section_id === a.class_section_id && (b.class_subject_id || null) === (a.class_subject_id || null))?.status || 'NOT STARTED';
   const rows = (as || []) as any[];
   const classTeacherRows = rows.filter((r) => r.role === 'CLASS');
@@ -38,7 +39,9 @@ export default async function TeacherDashboard({ searchParams }: { searchParams:
   const resultReadiness = (classTeacherSections as any[]).map((section: any) => {
     const subjectsForClass = resultSubjects.filter((s) => s.class_id === section.class_id);
     const statuses = subjectsForClass.map((subject) => {
-      const batch = resultBatches.find((b: any) => b.class_section_id === section.id && b.class_subject_id === subject.id);
+      const norm = (value: any) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const batch = resultBatches.find((b: any) => b.class_section_id === section.id && b.class_subject_id === subject.id)
+        || resultBatches.find((b: any) => b.class_section_id === section.id && norm(b.class_subjects?.display_label) === norm(subject.display_label));
       const status = batch?.status || 'NOT STARTED';
       return { ...subject, status };
     });
@@ -71,6 +74,7 @@ export default async function TeacherDashboard({ searchParams }: { searchParams:
       </div>
       {resultReadiness.length > 0 && <div className="card mt-4">
         <h2 className="h3">My Class Result Readiness</h2>
+        <ResultStatusAutoRefresh />
         <p className="muted mb-3">Check which subjects have submitted marks for your class. Submitted, verified, or locked marks count as ready; not-started and draft entries remain pending.</p>
         <div className="space-y-4">
           {resultReadiness.map((section: any) => (
