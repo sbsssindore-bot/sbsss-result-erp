@@ -108,7 +108,7 @@ export default async function ClassEntry({ searchParams }: { searchParams: { exa
         <ClassSubjectMarks students={enr.map((e: any) => ({ id: e.id, roll: e.roll_number, name: students.find((s: any) => s.id === e.student_id)?.name || '' }))} subjects={subjectRows} marks={allMarks} />
       </div>}
       <ClassEntryGrid key={`${exam.id}-${cs.id}-${status}-${batch?.updated_at}`} examId={exam.id} csId={cs.id} rows={rows} areas={areas} gradeValues={(gv || []).map((g: any) => g.value)}
-        statuses={(sts || []).map((s: any) => s.code)} manualStatus={rr?.rule?.mode !== 'auto'} canEdit={canEdit && selectedIsClassTeacher} isAdmin={isAdmin} canEditResultStatus={selectedIsClassTeacher && status !== 'LOCKED'} batchStatus={status} editableAreaIds={selectedGradeOnly ? selectedGradeAreaIds : []} gradeOnly={selectedGradeOnly} />
+        statuses={(sts || []).map((s: any) => s.code)} manualStatus={selectedIsClassTeacher || rr?.rule?.mode !== 'auto'} canEdit={canEdit && selectedIsClassTeacher} isAdmin={isAdmin} canEditResultStatus={selectedIsClassTeacher && status !== 'LOCKED'} batchStatus={status} editableAreaIds={selectedGradeOnly ? selectedGradeAreaIds : []} gradeOnly={selectedGradeOnly} />
     </>
   );
 }
