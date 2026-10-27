@@ -6,7 +6,7 @@ import { saveClassEntry } from '@/app/(app)/class-entry/actions';
 type Row = { enrId: string; roll: number | null; name: string; working: string; present: string; co: Record<string, string>; remarks: string; status: string };
 export default function ClassEntryGrid(p: {
   examId: string; csId: string; rows: Row[]; areas: { id: string; label: string }[]; gradeValues: string[];
-  statuses: string[]; manualStatus: boolean; canEdit: boolean; isAdmin: boolean; batchStatus: string; editableAreaIds?: string[]; gradeOnly?: boolean;
+  statuses: string[]; manualStatus: boolean; canEdit: boolean; isAdmin: boolean; batchStatus: string; editableAreaIds?: string[]; gradeOnly?: boolean; canEditResultStatus?: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(p.rows);
@@ -24,7 +24,7 @@ export default function ClassEntryGrid(p: {
       if (w != null && pr != null && pr > w) return setMsg({ t: 'err', s: `${r.name}: present days cannot exceed working days.` });
     }
     start(async () => {
-      const res = await saveClassEntry({ examId: p.examId, csId: p.csId, submit, rows: rows.map((r) => ({ e: r.enrId, working: p.gradeOnly ? null : num(r.working), present: p.gradeOnly ? null : num(r.present), co: Object.fromEntries(Object.entries(r.co).filter(([area]) => p.canEdit || (p.editableAreaIds || []).includes(area))), remarks: p.gradeOnly ? '' : r.remarks, status: p.isAdmin && p.manualStatus ? (r.status || null) : null })) });
+      const res = await saveClassEntry({ examId: p.examId, csId: p.csId, submit, rows: rows.map((r) => ({ e: r.enrId, working: p.gradeOnly ? null : num(r.working), present: p.gradeOnly ? null : num(r.present), co: Object.fromEntries(Object.entries(r.co).filter(([area]) => p.canEdit || (p.editableAreaIds || []).includes(area))), remarks: p.gradeOnly ? '' : r.remarks, status: ((p.isAdmin && p.manualStatus) || p.canEditResultStatus) ? (r.status || null) : null })) });
       if (res.ok) { setDirty(false); setMsg({ t: 'ok', s: res.message || 'Saved.' }); router.refresh(); } else setMsg({ t: 'err', s: res.error || 'Could not save.' });
     });
   }
@@ -41,7 +41,7 @@ export default function ClassEntryGrid(p: {
             <td>{p.canEdit ? <input className="input !w-24" inputMode="decimal" value={r.present} onChange={(e) => upd(i, { present: e.target.value })} aria-label={`${r.name} present days`} /> : r.present || '—'}</td>
             {p.areas.map((a) => <td key={a.id} className="text-center">{canEditArea(a.id) ?
               <select className="input !w-20" value={r.co[a.id] || ''} onChange={(e) => upd(i, { co: { ...r.co, [a.id]: e.target.value } })} aria-label={`${r.name} ${a.label}`}><option value="">—</option>{p.gradeValues.map((g) => <option key={g}>{g}</option>)}</select> : (r.co[a.id] || '—')}</td>)}
-            {p.manualStatus && <td>{p.isAdmin && p.canEdit ? <select className="input !w-40" value={r.status} onChange={(e) => upd(i, { status: e.target.value })}><option value="">—</option>{p.statuses.map((s) => <option key={s}>{s}</option>)}</select> : (r.status || '—')}</td>}
+            {p.manualStatus && <td>{(p.isAdmin && p.canEdit) || p.canEditResultStatus ? <select className="input !w-40" value={r.status} onChange={(e) => upd(i, { status: e.target.value })}><option value="">—</option>{p.statuses.map((s) => <option key={s}>{s}</option>)}</select> : (r.status || '—')}</td>}
             <td>{p.canEdit ? <input className="input !min-w-[220px]" maxLength={500} value={r.remarks} onChange={(e) => upd(i, { remarks: e.target.value })} aria-label={`${r.name} remarks`} /> : r.remarks}</td>
           </tr>))}
           {rows.length === 0 && <tr><td className="muted" colSpan={9}>No students in this class section.</td></tr>}</tbody></table></div>
