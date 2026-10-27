@@ -21,6 +21,28 @@ export default async function TeacherDashboard({ searchParams }: { searchParams:
   const { data: batches } = exam ? await sb.from('mark_batches').select('class_section_id,class_subject_id,status').eq('examination_id', exam.id) : { data: [] as any[] };
   const st = (a: any) => (batches || []).find((b: any) => b.class_section_id === a.class_section_id && (b.class_subject_id || null) === (a.class_subject_id || null))?.status || 'NOT STARTED';
   const rows = (as || []) as any[];
+  const classTeacherRows = rows.filter((r) => r.role === 'CLASS');
+  const classTeacherSectionIds = [...new Set(classTeacherRows.map((r) => r.class_section_id))];
+  const classTeacherSections = classTeacherSectionIds.length && session
+    ? (await sb.from('class_sections').select('id,label,class_id').in('id', classTeacherSectionIds)).data || []
+    : [];
+  const classIds = [...new Set(classTeacherSections.map((s: any) => s.class_id))];
+  const { data: classSubjects } = classIds.length && session
+    ? await sb.from('class_subjects').select('id,class_id,display_label,kind,status').eq('session_id', session.id).in('class_id', classIds).eq('kind', 'MARKS').eq('status', 'ACTIVE').order('display_order')
+    : { data: [] as any[] };
+  const resultSubjects = (classSubjects || []) as any[];
+  const resultBatches = (batches || []) as any[];
+  const resultReadiness = (classTeacherSections as any[]).map((section: any) => {
+    const subjectsForClass = resultSubjects.filter((s) => s.class_id === section.class_id);
+    const statuses = subjectsForClass.map((subject) => {
+      const batch = resultBatches.find((b: any) => b.class_section_id === section.id && b.class_subject_id === subject.id);
+      const status = batch?.status || 'NOT STARTED';
+      return { ...subject, status };
+    });
+    const readyCount = statuses.filter((s) => ['SUBMITTED', 'VERIFIED', 'LOCKED'].includes(s.status)).length;
+    const pendingCount = statuses.length - readyCount;
+    return { ...section, statuses, readyCount, pendingCount, ready: statuses.length > 0 && pendingCount === 0 };
+  });
   const subj = rows.filter((r) => r.role === 'SUBJECT');
   const pend = subj.filter((r) => ['NOT STARTED', 'DRAFT'].includes(st(r))).length;
   const gradeRows = (gradeAssignments || []) as any[];
@@ -44,6 +66,24 @@ export default async function TeacherDashboard({ searchParams }: { searchParams:
                 <td><Link className="btn btn-sm btn-sec" href={r.role === 'SUBJECT' ? `/marks?exam=${exam?.id}&cs=${r.class_section_id}&sub=${r.class_subject_id}` : `/class-entry?exam=${exam?.id}&cs=${r.class_section_id}`}>{r.role === 'SUBJECT' ? 'Marks' : 'Attendance & grades'}</Link></td></tr>))}
           </tbody></table></div>}
       </div>
+      {resultReadiness.length > 0 && <div className="card mt-4">
+        <h2 className="h3">My Class Result Readiness</h2>
+        <p className="muted mb-3">Check which subjects have submitted marks for your class. Submitted, verified, or locked marks count as ready; not-started and draft entries remain pending.</p>
+        <div className="space-y-4">
+          {resultReadiness.map((section: any) => (
+            <div key={section.id} className="rounded-lg border border-line p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-semibold">{section.label}</h3>
+                <span className={`chip ${section.ready ? 'chip-ok' : 'chip-warn'}`}>{section.ready ? 'RESULT READY' : `${section.pendingCount} SUBJECT(S) PENDING`}</span>
+              </div>
+              <p className="muted mb-2 text-sm">{section.readyCount} of {section.statuses.length} subjects ready</p>
+              <div className="tw"><table className="t"><thead><tr><th>Subject</th><th>Status</th></tr></thead><tbody>
+                {section.statuses.map((subject: any) => <tr key={subject.id}><td>{subject.display_label}</td><td><span className={`chip ${['SUBMITTED','VERIFIED','LOCKED'].includes(subject.status) ? 'chip-ok' : subject.status === 'DRAFT' ? 'chip-warn' : ''}`}>{subject.status}</span></td></tr>)}
+              </tbody></table></div>
+            </div>
+          ))}
+        </div>
+      </div>}
       {gradeRows.length > 0 && <div className="card mt-4">
         <h2 className="h3">My activity grade assignments</h2>
         <p className="muted mb-3">Only the activities assigned to you are editable.</p>
