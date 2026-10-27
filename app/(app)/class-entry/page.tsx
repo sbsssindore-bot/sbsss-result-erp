@@ -4,6 +4,7 @@ import { fetchAll, chunk } from '@/lib/db';
 import { fmtNum } from '@/lib/format';
 import ExamTabs from '@/components/ExamTabs';
 import ClassEntryGrid from '@/components/ClassEntryGrid';
+import ClassSubjectMarks from '@/components/ClassSubjectMarks';
 import { adminSetStatus } from '../admin/review/actions';
 
 export default async function ClassEntry({ searchParams }: { searchParams: { exam?: string; cs?: string; msg?: string; err?: string } }) {
@@ -62,7 +63,28 @@ export default async function ClassEntry({ searchParams }: { searchParams: { exa
   const { data: rr } = exam.result_rule_id ? await sb.from('result_rules').select('rule').eq('id', exam.result_rule_id).maybeSingle() : { data: null as any };
   const { data: batch } = await sb.from('mark_batches').select('*').eq('examination_id', exam.id).eq('class_section_id', cs.id).is('class_subject_id', null).maybeSingle();
   const status: string = batch?.status || 'NONE';
-  const canEdit = status !== 'LOCKED' && (isAdmin || status === 'NONE' || status === 'DRAFT');
+  const canEdit = status !== 'LOCKED' && (isAdmin || selectedIsClassTeacher || status === 'NONE' || status === 'DRAFT');
+  const { data: activeSubjects } = await sb.from('class_subjects')
+    .select('id,display_label,display_order')
+    .eq('session_id', session.id).eq('class_id', cs.class_id).eq('kind', 'MARKS').eq('status', 'ACTIVE').order('display_order');
+  const subjectRows = (activeSubjects || []) as any[];
+  const subjectIds = subjectRows.map((s) => s.id);
+  const { data: subjectBatches } = subjectIds.length
+    ? await sb.from('mark_batches').select('class_subject_id,status').eq('examination_id', exam.id).eq('class_section_id', cs.id).in('class_subject_id', subjectIds)
+    : { data: [] as any[] };
+  const allMarks: any[] = [];
+  for (const part of chunk(ids, 40)) {
+    if (part.length && subjectIds.length) {
+      const { data: markRows } = await sb.from('marks').select('enrollment_id,class_subject_id,value,is_absent')
+        .eq('examination_id', exam.id).in('enrollment_id', part).in('class_subject_id', subjectIds);
+      allMarks.push(...(markRows || []));
+    }
+  }
+  const subjectReadiness = subjectRows.map((s) => ({
+    ...s,
+    status: (subjectBatches || []).find((b: any) => b.class_subject_id === s.id)?.status || 'NOT STARTED'
+  }));
+
   const rows = enr.map((e: any) => {
     const a = att.find((x) => x.enrollment_id === e.id), r = rem.find((x) => x.enrollment_id === e.id);
     return { enrId: e.id, roll: e.roll_number, name: students.find((s: any) => s.id === e.student_id)?.name || '',
@@ -79,8 +101,14 @@ export default async function ClassEntry({ searchParams }: { searchParams: { exa
           {status !== 'LOCKED' && <form action={adminSetStatus}><input type="hidden" name="id" value={batch.id} /><input type="hidden" name="to" value="LOCKED" /><input type="hidden" name="back" value={back} /><button className="btn btn-sm">Lock</button></form>}
           {status !== 'DRAFT' && <form action={adminSetStatus} className="flex gap-2"><input type="hidden" name="id" value={batch.id} /><input type="hidden" name="to" value="DRAFT" /><input type="hidden" name="back" value={back} /><input name="reason" required placeholder="Reason to unlock / return" className="input !min-h-[36px] !w-56" /><button className="btn btn-sm btn-bad">Unlock / return</button></form>}</div>}
       </div>
+      {selectedIsClassTeacher && <div className="card mt-4">
+        <h2 className="h3">Subject-wise marks &amp; submission status</h2>
+        <p className="muted mb-3">Read-only marks for every student in your assigned class, with each subject's current submission status.</p>
+        <div className="mb-3 flex flex-wrap gap-2">{subjectReadiness.map((s: any) => <span key={s.id} className={`chip ${['SUBMITTED','VERIFIED','LOCKED'].includes(s.status) ? 'chip-ok' : 'chip-warn'}`}>{s.display_label}: {s.status}</span>)}</div>
+        <ClassSubjectMarks students={enr.map((e: any) => ({ id: e.id, roll: e.roll_number, name: students.find((s: any) => s.id === e.student_id)?.name || '' }))} subjects={subjectRows} marks={allMarks} />
+      </div>}
       <ClassEntryGrid key={`${exam.id}-${cs.id}-${status}-${batch?.updated_at}`} examId={exam.id} csId={cs.id} rows={rows} areas={areas} gradeValues={(gv || []).map((g: any) => g.value)}
-        statuses={(sts || []).map((s: any) => s.code)} manualStatus={rr?.rule?.mode !== 'auto'} canEdit={canEdit && selectedIsClassTeacher} isAdmin={isAdmin} batchStatus={status} editableAreaIds={selectedGradeOnly ? selectedGradeAreaIds : []} gradeOnly={selectedGradeOnly} />
+        statuses={(sts || []).map((s: any) => s.code)} manualStatus={selectedIsClassTeacher || rr?.rule?.mode !== 'auto'} canEdit={canEdit && selectedIsClassTeacher} isAdmin={isAdmin} canEditResultStatus={selectedIsClassTeacher && status !== 'LOCKED'} batchStatus={status} editableAreaIds={selectedGradeOnly ? selectedGradeAreaIds : []} gradeOnly={selectedGradeOnly} />
     </>
   );
 }

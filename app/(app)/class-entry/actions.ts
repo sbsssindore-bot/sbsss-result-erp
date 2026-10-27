@@ -20,6 +20,7 @@ export async function saveClassEntry(raw: unknown): Promise<{ ok: boolean; error
   try {
     // Class teachers can manage attendance/remarks; activity teachers can edit only assigned grade areas.
     let isGradeOnlyTeacher = false;
+    let isClassTeacher = false;
     let assignedAreaIds: string[] = [];
     if (!isAdmin) {
       if (!teacher) return { ok: false, error: 'Your login is not linked to a teacher record.' };
@@ -28,6 +29,7 @@ export async function saveClassEntry(raw: unknown): Promise<{ ok: boolean; error
         sb.from('teacher_grade_assignments').select('area_id,class_id').eq('teacher_id', teacher.id).eq('session_id', (await sb.from('class_sections').select('session_id').eq('id', i.csId).maybeSingle()).data?.session_id || '').limit(1000)
       ]);
       if (classAssignmentError || gradeAssignmentError) return { ok: false, error: friendlyError(classAssignmentError || gradeAssignmentError) };
+      isClassTeacher = Boolean(classAssignment?.length);
       const { data: targetSection } = await sb.from('class_sections').select('class_id').eq('id', i.csId).maybeSingle();
       assignedAreaIds = (gradeAssignments || []).filter((a: any) => a.class_id === targetSection?.class_id).map((a: any) => a.area_id);
       isGradeOnlyTeacher = !classAssignment?.length && assignedAreaIds.length > 0;
@@ -70,7 +72,7 @@ export async function saveClassEntry(raw: unknown): Promise<{ ok: boolean; error
       batch = ins.data;
     }
     if (batch.status === 'LOCKED') return { ok: false, error: 'This class entry is locked. Only the administrator can unlock it.' };
-    if (!isAdmin && ['SUBMITTED', 'VERIFIED'].includes(batch.status)) {
+    if (!isAdmin && !isClassTeacher && ['SUBMITTED', 'VERIFIED'].includes(batch.status)) {
       return { ok: false, error: 'This entry has been submitted. Ask the administrator to return it for correction.' };
     }
     const base = { batch_id: batch.id, examination_id: i.examId };
@@ -93,7 +95,7 @@ export async function saveClassEntry(raw: unknown): Promise<{ ok: boolean; error
       if (error) return { ok: false, error: friendlyError(error) };
     }
 
-    const rem = isGradeOnlyTeacher ? [] : i.rows.map((r) => ({ ...base, enrollment_id: r.e, remarks: r.remarks || null, ...(isAdmin ? { result_status: r.status || null } : {}) }));
+    const rem = isGradeOnlyTeacher ? [] : i.rows.map((r) => ({ ...base, enrollment_id: r.e, remarks: r.remarks || null, ...((isAdmin || (!isGradeOnlyTeacher && r.status !== null)) ? { result_status: r.status || null } : {}) }));
     if (rem.length) { const { error } = await sb.from('report_remarks').upsert(rem, { onConflict: 'enrollment_id,examination_id' }); if (error) return { ok: false, error: friendlyError(error) }; }
 
     if (i.submit && ['DRAFT', 'NONE'].includes(batch.status)) {
