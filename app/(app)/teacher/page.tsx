@@ -5,7 +5,10 @@ import { redirect } from 'next/navigation';
 export default async function TeacherDashboard({ searchParams }: { searchParams: { exam?: string } }) {
   const { sb, teacher, isAdmin } = await requireCtx();
   if (isAdmin) redirect('/admin');
-  const { session, exams, exam } = await sessionAndExams(sb, { exam: searchParams.exam });
+  const { session, exams, exam: selectedExam } = await sessionAndExams(sb, { exam: searchParams.exam });
+  // Keep the dashboard aligned with marks entry, which uses term exams (not Annual) for subject batches.
+  const termExams = exams.filter((e: any) => e.type !== 'ANNUAL');
+  const exam = termExams.find((e: any) => e.id === selectedExam?.id) || termExams[0] || selectedExam;
   if (!teacher) return <div className="card"><h1 className="h2">Welcome</h1><p className="text-sm">Your login is not linked to a teacher record yet. Please ask the administrator to add your email ID in Teachers.</p></div>;
 
   const { data: as } = await sb.from('teacher_assignments').select('id,role,class_section_id,class_subject_id,class_sections(label),class_subjects(display_label)').eq('teacher_id', teacher.id).eq('session_id', session?.id);
