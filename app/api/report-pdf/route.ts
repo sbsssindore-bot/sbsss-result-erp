@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { readFile } from 'node:fs/promises';
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import { getCtx } from '@/lib/auth';
@@ -41,7 +42,17 @@ export async function GET(req: NextRequest) {
     const cards = await loadCards(ctx.sb, examId, ids);
     if (!cards.length) return new Response('Nothing to print.', { status: 404 });
     const { data: settings } = await ctx.sb.from('school_settings').select('*').maybeSingle();
-    const html = renderDocument(cards.map(renderCard), await logoCssForPdf(settings));
+    let html = renderDocument(cards.map(renderCard), await logoCssForPdf(settings));
+    // The preview is served by the website, but Chromium generates this PDF from
+    // about:blank via page.setContent(). Root-relative image paths do not resolve
+    // there, so embed both originals directly into the downloaded PDF HTML.
+    const [seal, signature] = await Promise.all([
+      readFile(`${process.cwd()}/public/school-seal.webp`),
+      readFile(`${process.cwd()}/public/khushboo-jha-signature.webp`),
+    ]);
+    html = html
+      .replaceAll('src="/school-seal.webp"', `src="data:image/webp;base64,${seal.toString('base64')}"`)
+      .replaceAll('src="/khushboo-jha-signature.webp"', `src="data:image/webp;base64,${signature.toString('base64')}"`);
     const browser = await puppeteer.launch({
       args: chromium.args, headless: 'shell',
       executablePath: process.env.CHROME_EXECUTABLE_PATH || (await chromium.executablePath()),
