@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { readFile } from 'node:fs/promises';
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import { getCtx } from '@/lib/auth';
@@ -46,13 +45,23 @@ export async function GET(req: NextRequest) {
     // The preview is served by the website, but Chromium generates this PDF from
     // about:blank via page.setContent(). Root-relative image paths do not resolve
     // there, so embed both originals directly into the downloaded PDF HTML.
+    // Vercel serverless deployments may not include public assets in the
+    // function filesystem at /var/task/public. Fetch the deployed static assets
+    // by URL instead of reading local files.
+    const [sealResponse, signatureResponse] = await Promise.all([
+      fetch(new URL('/school-seal.webp', req.nextUrl.origin), { cache: 'no-store' }),
+      fetch(new URL('/khushboo-jha-signature.webp', req.nextUrl.origin), { cache: 'no-store' }),
+    ]);
+    if (!sealResponse.ok || !signatureResponse.ok) {
+      throw new Error(`Could not load report-card seal/signature assets (seal: ${sealResponse.status}, signature: ${signatureResponse.status})`);
+    }
     const [seal, signature] = await Promise.all([
-      readFile(`${process.cwd()}/public/school-seal.webp`),
-      readFile(`${process.cwd()}/public/khushboo-jha-signature.webp`),
+      sealResponse.arrayBuffer(),
+      signatureResponse.arrayBuffer(),
     ]);
     html = html
-      .replaceAll('src="/school-seal.webp"', `src="data:image/webp;base64,${seal.toString('base64')}"`)
-      .replaceAll('src="/khushboo-jha-signature.webp"', `src="data:image/webp;base64,${signature.toString('base64')}"`);
+      .replaceAll('src="/school-seal.webp"', `src="data:image/webp;base64,${Buffer.from(seal).toString('base64')}"`)
+      .replaceAll('src="/khushboo-jha-signature.webp"', `src="data:image/webp;base64,${Buffer.from(signature).toString('base64')}"`);
     const browser = await puppeteer.launch({
       args: chromium.args, headless: 'shell',
       executablePath: process.env.CHROME_EXECUTABLE_PATH || (await chromium.executablePath()),
