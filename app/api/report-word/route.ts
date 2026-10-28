@@ -42,7 +42,13 @@ export async function GET(req: NextRequest) {
     if (!cards.length) return new Response('Nothing to download.', { status: 404 });
     const { data: settings } = await ctx.sb.from('school_settings').select('*').maybeSingle();
     const logoCss = await logoCssForPdf(settings);
+    // Word opens this HTML document from a downloaded local file, so root-relative
+    // image URLs ("/school-seal.webp") resolve to the local disk and show broken icons.
+    // Use absolute public asset URLs in the Word-compatible export.
+    const assetBase = req.nextUrl.origin;
     const html = renderDocument(cards.map(renderCard), logoCss)
+      .replaceAll('src="/school-seal.webp"', `src="${assetBase}/school-seal.webp"`)
+      .replaceAll('src="/khushboo-jha-signature.webp"', `src="${assetBase}/khushboo-jha-signature.webp"`)
       .replace('</head>', '<meta name="ProgId" content="Word.Document"><meta name="Generator" content="SBSSS Result ERP"><style>html,body{background:#fff!important}body{font-family:Cambria,Georgia,"Times New Roman",serif}.rc{page-break-after:always;break-after:page;margin:0 auto!important}.rc:last-child{page-break-after:auto;break-after:auto}table{mso-table-lspace:0pt;mso-table-rspace:0pt}td,th{mso-padding-alt:3.5pt 5pt}</style></head>');
     const name = (cards.length === 1 ? cards[0].fileName : `${cards[0].fileName.split('_Roll-')[0]}_all`) + '.doc';
     return new Response(html, {
