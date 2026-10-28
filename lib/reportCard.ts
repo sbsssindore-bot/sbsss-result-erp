@@ -67,12 +67,13 @@ export const REPORT_CSS = `
 .rc .sg{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:end;column-gap:14px;margin-top:48px}
 .rc .sg>div{min-width:0;text-align:center;border-top:1px solid #222;padding-top:4px;font-size:10.5px}
 .rc .sg .principal-signatory{display:flex;flex-direction:column;align-items:stretch;border-top:0;padding-top:0}
-.rc .principal-stamp-sign{height:43px;display:flex;align-items:flex-end;justify-content:center;gap:10px;margin:0 0 3px;position:relative;overflow:visible}
+.rc .principal-stamp-sign{height:58px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:0;margin:0 0 3px;position:relative;overflow:visible}
 .rc .principal-stamp-sign img{display:block;object-fit:contain;flex:0 0 auto}
-.rc .principal-stamp-sign .school-seal{width:42px;height:42px}
-.rc .principal-stamp-sign .principal-signature{width:92px;height:40px}
+.rc .principal-stamp-sign .school-seal{width:42px;height:42px;position:relative;z-index:1}
+.rc .principal-stamp-sign .principal-signature{width:92px;height:28px;position:relative;z-index:2;margin-bottom:-7px}
+.rc .principal-stamp-sign .school-seal{margin-bottom:-5px}
 .rc .principal-signatory>div:last-child{border-top:1px solid #222;padding-top:4px}
-@media(max-width:700px){.rc .sg{column-gap:8px}.rc .principal-stamp-sign{gap:4px}.rc .principal-stamp-sign .school-seal{width:34px;height:34px}.rc .principal-stamp-sign .principal-signature{width:72px;height:34px}}
+@media(max-width:700px){.rc .sg{column-gap:8px}.rc .principal-stamp-sign{height:50px}.rc .principal-stamp-sign .school-seal{width:34px;height:34px}.rc .principal-stamp-sign .principal-signature{width:72px;height:24px}}
 .rc .rm{border:1px solid #333;min-height:44px;padding:5px 7px;margin-bottom:5px}
 @page{size:A4;margin:7mm}
 @media print{.rc{margin:0 auto;page-break-inside:avoid}.rc:not(:last-child){page-break-after:always;break-after:page}}
