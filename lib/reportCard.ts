@@ -64,7 +64,7 @@ export const REPORT_CSS = `
 .rc .info td.k{width:17%;font-weight:700;background:rgba(245,245,245,.8)}
 .rc h4{margin:6px 0 4px;font-size:11.5px;letter-spacing:.2px}
 .rc .leg td{font-size:10px;padding:3px 2px}
-.rc .sg{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:end;column-gap:14px;margin-top:76px}
+.rc .sg{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:start;column-gap:14px;margin-top:76px}
 .rc .sg>div{min-width:0;text-align:center;border-top:1px solid #222;padding-top:4px;font-size:10.5px}
 .rc .sg .principal-signatory{position:relative;display:block;border-top:1px solid #222;padding-top:4px}
 .rc .principal-stamp-sign{position:absolute;left:0;right:0;bottom:100%;height:72px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:0;margin:0 0 4px;overflow:visible}
