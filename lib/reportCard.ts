@@ -67,10 +67,11 @@ export const REPORT_CSS = `
 .rc .sg{display:flex;justify-content:space-between;gap:14px;margin-top:34px}
 .rc .sg>div{flex:1;text-align:center;border-top:1px solid #222;padding-top:3px;font-size:10.5px}
 .rc .sg .principal-signatory{display:flex;flex-direction:column;align-items:stretch;border-top:0;padding-top:0}
-.rc .principal-stamp-sign{height:45px;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:-31px;margin-bottom:2px;position:relative}
-.rc .principal-stamp-sign img{display:block;object-fit:contain;max-height:44px}
-.rc .principal-stamp-sign .school-seal{width:43px;height:43px}
-.rc .principal-stamp-sign .principal-signature{width:92px;height:42px}
+.rc .principal-stamp-sign{height:68px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:0;margin:0 0 3px;position:relative;overflow:visible}
+.rc .principal-stamp-sign img{display:block;object-fit:contain;flex:0 0 auto}
+.rc .principal-stamp-sign .school-seal{width:43px;height:43px;position:relative;z-index:1;margin:0}
+.rc .principal-stamp-sign .principal-signature{width:92px;height:38px;position:relative;z-index:2;margin-bottom:-13px}
+.rc .principal-signatory>div:last-child{border-top:1px solid #222;padding-top:4px}
 .rc .principal-signatory>div:last-child{border-top:1px solid #222;padding-top:3px}
 .rc .rm{border:1px solid #333;min-height:44px;padding:5px 7px;margin-bottom:5px}
 @page{size:A4;margin:7mm}
