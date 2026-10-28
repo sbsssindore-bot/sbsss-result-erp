@@ -67,7 +67,7 @@ export const REPORT_CSS = `
 .rc .sg{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:end;column-gap:14px;margin-top:48px}
 .rc .sg>div{min-width:0;text-align:center;border-top:1px solid #222;padding-top:4px;font-size:10.5px}
 .rc .sg .principal-signatory{display:flex;flex-direction:column;align-items:stretch;border-top:0;padding-top:0}
-.rc .principal-stamp-sign{height:58px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:0;margin:0 0 3px;position:relative;overflow:visible}
+.rc .principal-stamp-sign{height:58px;display:flex;flex-direction:column-reverse;align-items:center;justify-content:flex-end;gap:0;margin:0 0 3px;position:relative;overflow:visible}
 .rc .principal-stamp-sign img{display:block;object-fit:contain;flex:0 0 auto}
 .rc .principal-stamp-sign .school-seal{width:42px;height:42px;position:relative;z-index:1}
 .rc .principal-stamp-sign .principal-signature{width:92px;height:28px;position:relative;z-index:2;margin-bottom:-7px}
