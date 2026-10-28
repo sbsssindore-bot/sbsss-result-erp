@@ -42,7 +42,7 @@ export function renderCard(d: ReportCardData): string {
   return `<section class="rc">${wm}<div class="hd"><div class="lg" role="img" aria-label="School logo"></div><div class="tx"><div class="sn">${esc(d.schoolName)}</div><div class="rt">${esc(d.examName.toUpperCase())} EXAMINATION REPORT CARD</div><div class="ss">ACADEMIC SESSION ${esc(d.sessionLabel)}</div></div><div class="sp"></div></div>
 <table class="info"><tr><td class="k">Scholar Number:</td><td>${esc(d.scholar)}</td><td class="k">Roll Number:</td><td>${esc(d.roll)}</td></tr><tr><td class="k">Student Name:</td><td>${esc(d.name)}</td><td class="k">Class &amp; Section:</td><td>${esc(d.classLabel)}</td></tr><tr><td class="k">Father's Name:</td><td>${esc(d.father)}</td><td class="k">Mother's Name:</td><td>${esc(d.mother)}</td></tr><tr><td class="k">Attendance (Days):</td><td>${esc(d.attendance)}</td><td class="k">Academic Term:</td><td>${esc(d.termLabel)}</td></tr></table>
 ${order.join('')}<h4>Class Teacher's Remarks:</h4><div class="rm">${esc(d.remarks)}</div>
-<div class="sg"><div>${esc(d.sig.class_teacher)}</div><div>${esc(d.sig.parent)}</div><div>${esc(d.sig.principal)}${d.principalName ? `<br><span style="font-size:9.5px">${esc(d.principalName)}</span>` : ''}</div></div></section>`;
+<div class="sg"><div>${esc(d.sig.class_teacher)}</div><div>${esc(d.sig.parent)}</div><div class="principal-signatory"><div class="principal-stamp-sign"><img class="school-seal" src="/school-seal.webp" alt="School seal"><img class="principal-signature" src="/khushboo-jha-signature.webp" alt="Khushboo Jha signature"></div><div>${esc(d.sig.principal)}${d.principalName ? `<br><span style="font-size:9.5px">${esc(d.principalName)}</span>` : ''} </div></div></div></section>`;
 }
 
 export const REPORT_CSS = `
@@ -65,7 +65,13 @@ export const REPORT_CSS = `
 .rc h4{margin:6px 0 4px;font-size:11.5px;letter-spacing:.2px}
 .rc .leg td{font-size:10px;padding:3px 2px}
 .rc .sg{display:flex;justify-content:space-between;gap:14px;margin-top:34px}
-.rc .sg div{flex:1;text-align:center;border-top:1px solid #222;padding-top:3px;font-size:10.5px}
+.rc .sg>div{flex:1;text-align:center;border-top:1px solid #222;padding-top:3px;font-size:10.5px}
+.rc .sg .principal-signatory{display:flex;flex-direction:column;align-items:stretch;border-top:0;padding-top:0}
+.rc .principal-stamp-sign{height:45px;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:-31px;margin-bottom:2px;position:relative}
+.rc .principal-stamp-sign img{display:block;object-fit:contain;max-height:44px}
+.rc .principal-stamp-sign .school-seal{width:43px;height:43px}
+.rc .principal-stamp-sign .principal-signature{width:92px;height:42px}
+.rc .principal-signatory>div:last-child{border-top:1px solid #222;padding-top:3px}
 .rc .rm{border:1px solid #333;min-height:44px;padding:5px 7px;margin-bottom:5px}
 @page{size:A4;margin:7mm}
 @media print{.rc{margin:0 auto;page-break-inside:avoid}.rc:not(:last-child){page-break-after:always;break-after:page}}
