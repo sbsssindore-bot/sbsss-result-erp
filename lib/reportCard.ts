@@ -64,15 +64,15 @@ export const REPORT_CSS = `
 .rc .info td.k{width:17%;font-weight:700;background:rgba(245,245,245,.8)}
 .rc h4{margin:6px 0 4px;font-size:11.5px;letter-spacing:.2px}
 .rc .leg td{font-size:10px;padding:3px 2px}
-.rc .sg{display:flex;justify-content:space-between;gap:14px;margin-top:34px}
-.rc .sg>div{flex:1;text-align:center;border-top:1px solid #222;padding-top:3px;font-size:10.5px}
-.rc .sg .principal-signatory{display:flex;flex-direction:column;align-items:stretch;border-top:0;padding-top:0}
-.rc .principal-stamp-sign{height:68px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:0;margin:0 0 3px;position:relative;overflow:visible}
+.rc .sg{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:start;column-gap:14px;margin-top:76px}
+.rc .sg>div{min-width:0;text-align:center;border-top:1px solid #222;padding-top:4px;font-size:10.5px}
+.rc .sg .principal-signatory{position:relative;display:block;border-top:1px solid #222;padding-top:4px}
+.rc .principal-stamp-sign{position:absolute;left:0;right:0;bottom:100%;height:72px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:0;margin:0 0 4px;overflow:visible}
 .rc .principal-stamp-sign img{display:block;object-fit:contain;flex:0 0 auto}
-.rc .principal-stamp-sign .school-seal{width:43px;height:43px;position:relative;z-index:1;margin:0}
-.rc .principal-stamp-sign .principal-signature{width:92px;height:38px;position:relative;z-index:2;margin-bottom:-13px}
-.rc .principal-signatory>div:last-child{border-top:1px solid #222;padding-top:4px}
-.rc .principal-signatory>div:last-child{border-top:1px solid #222;padding-top:3px}
+.rc .principal-stamp-sign .school-seal{width:58px;height:58px;position:relative;z-index:1;margin:0}
+.rc .principal-stamp-sign .principal-signature{width:88px;height:39px;position:absolute;left:50%;top:22px;transform:translateX(-50%);z-index:2}
+.rc .principal-signatory>div:last-child{border-top:0;padding-top:0}
+@media(max-width:700px){.rc .sg{column-gap:8px}.rc .principal-stamp-sign .school-seal{width:50px;height:50px}.rc .principal-stamp-sign .principal-signature{width:76px;height:34px;top:20px}}
 .rc .rm{border:1px solid #333;min-height:44px;padding:5px 7px;margin-bottom:5px}
 @page{size:A4;margin:7mm}
 @media print{.rc{margin:0 auto;page-break-inside:avoid}.rc:not(:last-child){page-break-after:always;break-after:page}}
