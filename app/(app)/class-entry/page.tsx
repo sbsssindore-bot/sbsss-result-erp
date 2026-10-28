@@ -73,10 +73,19 @@ export default async function ClassEntry({ searchParams }: { searchParams: { exa
     ? await sb.from('mark_batches').select('class_subject_id,status').eq('examination_id', exam.id).eq('class_section_id', cs.id).in('class_subject_id', subjectIds)
     : { data: [] as any[] };
   const allMarks: any[] = [];
-  for (const part of chunk(ids, 40)) {
+  // Supabase applies a row limit to each query. A 40-student chunk can exceed
+  // that limit (students × subjects × components), silently dropping some
+  // students' rows and rendering every subject as "—". Keep each request small.
+  for (const part of chunk(ids, 10)) {
     if (part.length && subjectIds.length) {
-      const { data: markRows } = await sb.from('marks').select('enrollment_id,class_subject_id,value,is_absent')
-        .eq('examination_id', exam.id).in('enrollment_id', part).in('class_subject_id', subjectIds);
+      const { data: markRows, error: markRowsError } = await sb.from('marks')
+        .select('enrollment_id,class_subject_id,value,is_absent')
+        .eq('examination_id', exam.id)
+        .in('enrollment_id', part)
+        .in('class_subject_id', subjectIds);
+      if (markRowsError) {
+        throw new Error(`Unable to load class subject marks: ${markRowsError.message}`);
+      }
       allMarks.push(...(markRows || []));
     }
   }
