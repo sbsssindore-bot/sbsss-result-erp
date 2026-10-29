@@ -171,7 +171,7 @@ export async function loadCards(sb: any, examId: string, enrollmentIds: string[]
       rows, co: areasFor.map((a: any) => ({ label: a.display_label || a.name, grade: coKey.get(`${enrId}|${a.id}`)?.grade || '' })),
       summaryLabel: layout.summary_label || 'Percentage:',
       summaryValue: marksCard && o.maxC ? `${fmtNum(o.total)} / ${fmtNum(o.max)}  (${pctTxt})` : pctTxt,
-      issueDate: settings?.issue_date ? fmtDate(settings.issue_date) : today, resultStatus: status,
+      issueDate: '31/10/2026', resultStatus: status,
       legend: bands, remarks: rem?.remarks || '',
       fileName: `${session.label}_${String(exam.name).replace(/\s+/g, '-')}_Class-${ROMAN[cls]}_${cs.label.replace(/^[IVX]+[ -]*/, '').replace(/\s+/g, '') || 'A'}_Roll-${String(en.roll_number ?? 0).padStart(2, '0')}_${String(st.name).replace(/[^A-Za-z0-9]+/g, '')}`,
     });
